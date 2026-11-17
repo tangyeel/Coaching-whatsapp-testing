@@ -8,14 +8,18 @@ export async function GET(request) {
 
   const { searchParams } = new URL(request.url);
   const batchId = searchParams.get("batch_id");
+  const includeArchived = searchParams.get("include_archived") === "true";
   const admin = createAdminClient();
 
   let query = admin
     .from("students")
     .select("*, batches(id, name)")
     .eq("institute_id", auth.instituteId)
-    .eq("is_active", true)
     .order("full_name", { ascending: true });
+
+  if (!includeArchived) {
+    query = query.is("deleted_at", null).eq("is_active", true);
+  }
 
   if (batchId) {
     query = query.eq("batch_id", batchId);
@@ -69,6 +73,7 @@ export async function POST(request) {
           student_phone: normalizePhone(body.student_phone) || null,
           enrollment_date: body.enrollment_date || new Date().toISOString().split("T")[0],
           is_active: true,
+          deleted_at: null,
         },
       ])
       .select()
@@ -91,6 +96,7 @@ export async function POST(request) {
           guardian_phone: phone,
           roll_no: s.roll_no || null,
           is_active: true,
+          deleted_at: null,
         };
         // If it's an existing student with a real UUID, preserve it
         if (s.id && !String(s.id).startsWith("new-")) {
@@ -116,7 +122,7 @@ export async function PATCH(request) {
   if (auth.error) return Response.json({ error: auth.error }, { status: auth.status });
 
   const body = await request.json();
-  const { id, full_name, roll_no, guardian_name, guardian_phone, student_phone, is_active } = body;
+  const { id, full_name, roll_no, guardian_name, guardian_phone, student_phone, is_active, restore } = body;
   if (!id) return Response.json({ error: "Student ID required" }, { status: 400 });
 
   const updates = {};
@@ -126,6 +132,10 @@ export async function PATCH(request) {
   if (guardian_phone !== undefined) updates.guardian_phone = normalizePhone(guardian_phone);
   if (student_phone !== undefined) updates.student_phone = normalizePhone(student_phone);
   if (is_active !== undefined) updates.is_active = is_active;
+  if (restore === true) {
+    updates.deleted_at = null;
+    updates.is_active = true;
+  }
 
   const admin = createAdminClient();
   const { data, error } = await admin
@@ -138,4 +148,38 @@ export async function PATCH(request) {
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
   return Response.json({ success: true, data });
+}
+
+export async function DELETE(request) {
+  const auth = await getAuthContext(request);
+  if (auth.error) return Response.json({ error: auth.error }, { status: auth.status });
+
+  if (auth.isTeacher) {
+    return Response.json({ error: "Teachers cannot delete or archive students" }, { status: 403 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get("id");
+  if (!id) return Response.json({ error: "Student ID is required" }, { status: 400 });
+
+  const admin = createAdminClient();
+
+  // Perform soft delete: preserve all past attendance, marks, and fee payment audits
+  const { data, error } = await admin
+    .from("students")
+    .update({
+      deleted_at: new Date().toISOString(),
+      is_active: false,
+    })
+    .eq("id", id)
+    .eq("institute_id", auth.instituteId)
+    .select()
+    .single();
+
+  if (error) return Response.json({ error: error.message }, { status: 500 });
+  return Response.json({
+    success: true,
+    data,
+    message: `${data.full_name} has been archived. All academic and fee records are preserved.`,
+  });
 }

@@ -46,13 +46,32 @@ export default function InvoiceReceiptModal({ isOpen, onClose, data, institute, 
         {/* Printable Document Body */}
         <div className="p-8 bg-white text-slate-900 printable-card">
           {/* Institute Header */}
-          <div className="flex justify-between items-start border-b border-slate-200 pb-6 mb-6">
-            <div>
-              <h2 className="text-2xl font-bold text-slate-900">{institute?.name || "Educational Institute"}</h2>
-              <p className="text-xs text-slate-500 mt-1 max-w-sm">{institute?.address || "Institute Campus"}</p>
-              {institute?.contact_phone && (
-                <p className="text-xs text-slate-600 mt-0.5">Contact: {institute.contact_phone}</p>
+          <div
+            className="flex justify-between items-start border-b-2 pb-6 mb-6"
+            style={{ borderColor: institute?.banner_color || "#e2e8f0" }}
+          >
+            <div className="flex items-center gap-4">
+              {institute?.logo_url ? (
+                <img
+                  src={institute.logo_url}
+                  alt={institute.name || "Institute"}
+                  className="h-14 w-auto max-w-[100px] object-contain rounded"
+                />
+              ) : (
+                <div
+                  className="h-14 w-14 rounded-xl flex items-center justify-center text-white font-black text-2xl shadow-sm"
+                  style={{ backgroundColor: institute?.banner_color || "#1e3a5f" }}
+                >
+                  {institute?.name?.[0]?.toUpperCase() || "I"}
+                </div>
               )}
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900">{institute?.name || "Educational Institute"}</h2>
+                <p className="text-xs text-slate-500 mt-0.5 max-w-sm">{institute?.address || "Institute Campus"}</p>
+                {institute?.contact_phone && (
+                  <p className="text-xs text-slate-600 mt-0.5">Contact: {institute.contact_phone}</p>
+                )}
+              </div>
             </div>
             <div className="text-right">
               <span className="inline-block px-3 py-1 bg-slate-100 text-slate-800 font-bold text-xs uppercase tracking-wider rounded">

@@ -25,9 +25,26 @@ export default function Navbar({ profile, institute }) {
     <nav className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-30 no-print">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center shadow-md shadow-blue-500/20">
-            <GraduationCap className="w-5 h-5 text-white" />
-          </div>
+          {institute?.logo_url && profile?.role !== "global_admin" ? (
+            <img
+              src={institute.logo_url}
+              alt={institute.name || "Logo"}
+              className="h-9 w-auto max-w-[44px] max-h-9 object-contain rounded-lg bg-white/5 p-0.5"
+            />
+          ) : (
+            <div
+              className="w-9 h-9 rounded-xl flex items-center justify-center shadow-md text-white font-bold text-sm"
+              style={{
+                backgroundColor: profile?.role === "global_admin" ? "#7c3aed" : (institute?.banner_color || "#2563eb")
+              }}
+            >
+              {profile?.role === "global_admin" ? (
+                <Shield className="w-5 h-5 text-white" />
+              ) : (
+                <GraduationCap className="w-5 h-5 text-white" />
+              )}
+            </div>
+          )}
           <div>
             <span className="font-semibold text-sm tracking-tight text-white block">
               {profile?.role === "global_admin" ? "Global Admin Portal" : (institute?.name || "Institute Portal")}

@@ -30,6 +30,12 @@ export default function HomePage() {
         const data = await res.json();
         const role = data.role;
 
+        // If newly onboarded institute admin hasn't set their permanent password yet
+        if (role === "institute_admin" && data.profile?.password_changed === false) {
+          router.replace("/setup-password");
+          return;
+        }
+
         if (role === "global_admin") {
           router.replace("/admin");
         } else if (role === "teacher") {

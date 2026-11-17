@@ -2,7 +2,15 @@
   "crons": [
     {
       "path": "/api/ping",
-      "schedule": "0 0 * * *"
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/fee-reminders",
+      "schedule": "30 6 * * *"
+    },
+    {
+      "path": "/api/cron/reset-quota",
+      "schedule": "0 18 1 * *"
     }
   ]
 }
