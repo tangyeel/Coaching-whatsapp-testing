@@ -114,6 +114,7 @@ The database is built from [supabase/schema.sql](file:///e:/Whatsapp_Production/
 | `fee_invoices` | Invoices with auto-incrementing numbers and balance due |
 | `fee_payments` | Payment receipts with payment mode (Cash, UPI, Cheque, Bank Transfer) |
 | `message_jobs` & `message_recipients` | Queue, idempotency keys, delivery status, and Meta message IDs |
+| `plan_defaults` | Pre-configured message tiers (Starter: 500, Growth: 2,000, Pro: 5,000, Enterprise: 15,000, Custom) |
 
 ---
 
@@ -123,7 +124,8 @@ The database is built from [supabase/schema.sql](file:///e:/Whatsapp_Production/
 1. Create a project on [Supabase](https://supabase.com).
 2. Navigate to **SQL Editor** in your Supabase dashboard.
 3. Paste the contents of `supabase/schema.sql` and click **Run**.
-4. (Optional) Run `supabase/seed.sql` to elevate your primary email to `global_admin`:
+4. Paste the contents of `supabase/schema_v2.sql` (v2.0 Addendum: Soft Deletes, Quota Governance, Branding & Autopilot) and click **Run**.
+5. Elevate your primary developer account to `global_admin` using `supabase/seed.sql`:
    ```sql
    SELECT public.make_global_admin('your-email@example.com');
    ```
@@ -135,8 +137,14 @@ NEXT_PUBLIC_SUPABASE_URL=https://<your-project-id>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
 SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
 
-# Optional Cron Secret for ping keepalive
+# Supabase Supavisor Transaction Pooler (Port 6543) for scaled serverless execution
+SUPABASE_DB_URL=postgresql://postgres.[ref]:[password]@aws-0-ap-south-1.pooler.supabase.com:6543/postgres
+
+# Cron Secret for automated keepalive and fee reminder crons
 CRON_SECRET=your_super_secret_cron_token
+
+# Platform Support Email (shown on upgrade prompts)
+NEXT_PUBLIC_SUPPORT_EMAIL=support@yourportal.com
 ```
 
 ### 3. Local Development
@@ -158,8 +166,11 @@ npm run start
 
 1. Push this repository to GitHub.
 2. Import the project into [Vercel](https://vercel.com).
-3. Add the environment variables: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`.
-4. Deploy! The included `vercel.json` will automatically configure a daily keep-alive cron ping to `/api/ping` to prevent Supabase inactivity pausing.
+3. Add the environment variables: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `CRON_SECRET`.
+4. Deploy! The included `vercel.json` automatically configures three serverless cron jobs:
+   * **Database Keep-Alive**: Daily at 06:00 UTC (`/api/ping`) to prevent Supabase inactivity pausing.
+   * **Fee Reminder Autopilot**: Daily at 12:00 PM IST (06:30 UTC) (`/api/cron/fee-reminders`) to auto-dispatch 7-day, 2-day, and due-date alerts.
+   * **Monthly Quota Reset**: 1st of each month at 23:30 IST (18:00 UTC) (`/api/cron/reset-quota`) to reset rolling monthly message counters.
 
 ---
 
