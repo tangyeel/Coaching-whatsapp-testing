@@ -1,12 +1,13 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 import Navbar from "@/components/Navbar";
 import ReportCardModal from "@/components/ReportCardModal";
 import {
   Calendar, Check, X, Send, Award, FileText,
-  Users, AlertCircle, Sparkles, CheckCircle2, Plus
+  Users, AlertCircle, Sparkles, CheckCircle2, Plus, UploadCloud
 } from "lucide-react";
 
 export default function TeacherPortal() {
@@ -40,6 +41,7 @@ export default function TeacherPortal() {
   const [sendingMarks, setSendingMarks] = useState(false);
   const [marksMessage, setMarksMessage] = useState("");
   const [showNewAssessment, setShowNewAssessment] = useState(false);
+  const excelMarksInputRef = useRef(null);
   const [newAssessment, setNewAssessment] = useState({
     title: "",
     subject: "Maths",
@@ -265,6 +267,58 @@ export default function TeacherPortal() {
   }
 
   // --- Marks Actions ---
+  function handleExcelMarksUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = evt => {
+      try {
+        const wb = XLSX.read(evt.target?.result, { type: "array" });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const rawJson = XLSX.utils.sheet_to_json(sheet);
+
+        if (rawJson.length === 0) {
+          alert("Excel file is empty");
+          return;
+        }
+
+        const newScores = { ...marksState };
+        let matchedCount = 0;
+
+        rawJson.forEach(row => {
+          const lower = {};
+          Object.keys(row).forEach(k => {
+            lower[k.toLowerCase().replace(/[^a-z0-9]/g, "")] = row[k];
+          });
+
+          const rollVal = String(lower.roll || lower.rollno || "").trim();
+          const nameVal = String(lower.name || lower.studentname || "").toLowerCase().trim();
+          const scoreVal = lower.marks !== undefined ? lower.marks : lower.score;
+
+          if (scoreVal === undefined) return;
+
+          const matchedStudent = students.find(s => {
+            if (rollVal && s.roll_no && String(s.roll_no).trim() === rollVal) return true;
+            if (nameVal && s.full_name?.toLowerCase().trim() === nameVal) return true;
+            return false;
+          });
+
+          if (matchedStudent) {
+            newScores[matchedStudent.id] = Number(scoreVal);
+            matchedCount++;
+          }
+        });
+
+        setMarksState(newScores);
+        alert(`✔ Auto-filled scores for ${matchedCount} students from Excel`);
+      } catch (err) {
+        alert("Failed to parse marks Excel: " + err.message);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
   async function handleCreateAssessment(e) {
     e.preventDefault();
     try {
@@ -607,13 +661,30 @@ export default function TeacherPortal() {
                   </select>
                 </div>
 
-                <button
-                  onClick={() => setShowNewAssessment(true)}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>New Assessment</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => excelMarksInputRef.current?.click()}
+                    disabled={!selectedAssessmentId}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition-colors"
+                  >
+                    <UploadCloud className="w-3.5 h-3.5" />
+                    <span>Import Scores (Excel)</span>
+                  </button>
+                  <input
+                    ref={excelMarksInputRef}
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={handleExcelMarksUpload}
+                    className="hidden"
+                  />
+                  <button
+                    onClick={() => setShowNewAssessment(true)}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>New Assessment</span>
+                  </button>
+                </div>
               </div>
 
               {/* Assessment Table */}

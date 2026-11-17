@@ -6,6 +6,7 @@ import Navbar from "@/components/Navbar";
 import InvoiceReceiptModal from "@/components/InvoiceReceiptModal";
 import TransferStudentModal from "@/components/TransferStudentModal";
 import ExcelStudentImportModal from "@/components/ExcelStudentImportModal";
+import StudentProfileModal from "@/components/StudentProfileModal";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
   Users, Layers, Receipt, Settings, Plus, Search,
@@ -39,6 +40,9 @@ export default function InstituteAdminDashboard() {
   const [modalDocData, setModalDocData] = useState(null);
   const [modalDocType, setModalDocType] = useState("receipt");
   const [showExcelImportModal, setShowExcelImportModal] = useState(false);
+  const [selectedStudentForProfile, setSelectedStudentForProfile] = useState(null);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [sendingReminderId, setSendingReminderId] = useState(null);
 
   // New Batch State
   const [showNewBatchModal, setShowNewBatchModal] = useState(false);
@@ -298,6 +302,46 @@ export default function InstituteAdminDashboard() {
         setReceiptModalOpen(true);
       } else { alert(json.error); }
     } catch (err) { alert(err.message); }
+  }
+
+  async function handleSendFeeReminder(inv) {
+    const parentName = inv.student?.guardian_name || inv.student?.full_name || "Parent";
+    const balancePaise = Number(inv.amount_due) - Number(inv.amount_paid);
+    if (!confirm(`Dispatch WhatsApp fee reminder to ${parentName} for ₹${(balancePaise / 100).toFixed(2)}?`)) return;
+
+    setSendingReminderId(inv.id);
+    try {
+      const res = await fetch("/api/messages/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          template_key: "fee_reminder",
+          recipients: [
+            {
+              student_id: inv.student_id,
+              student_name: inv.student?.full_name,
+              guardian_name: parentName,
+              guardian_phone: inv.student?.guardian_phone,
+              invoice_no: inv.invoice_no,
+              amount_due: formatCurrency(balancePaise),
+              due_date: formatDate(inv.due_date),
+            },
+          ],
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success && json.successCount > 0) {
+        alert(`✔ WhatsApp fee reminder sent to ${inv.student?.guardian_phone}`);
+        fetchMessageJobs();
+      } else {
+        alert(`✘ Failed to send: ${json.error || "WhatsApp dispatch error"}`);
+      }
+    } catch (err) {
+      alert(`✘ Error: ${err.message}`);
+    } finally {
+      setSendingReminderId(null);
+    }
   }
 
   // --- Handlers: Settings ---
@@ -599,23 +643,44 @@ export default function InstituteAdminDashboard() {
                     filteredStudents.map(s => (
                       <tr key={s.id} className="hover:bg-slate-800/30">
                         <td className="py-3 px-4 font-mono text-xs text-slate-500">{s.roll_no || "—"}</td>
-                        <td className="py-3 px-4 font-semibold text-slate-200">{s.full_name}</td>
+                        <td className="py-3 px-4">
+                          <button
+                            onClick={() => {
+                              setSelectedStudentForProfile(s);
+                              setProfileModalOpen(true);
+                            }}
+                            className="font-semibold text-slate-200 hover:text-blue-400 transition-colors text-left"
+                            title="View Student Profile & Ledger"
+                          >
+                            {s.full_name}
+                          </button>
+                        </td>
                         <td className="py-3 px-4 text-xs text-slate-300 font-medium">
                           {s.batches?.name || "General"}
                         </td>
                         <td className="py-3 px-4 text-xs font-mono text-slate-400">
                           {s.guardian_phone}
                         </td>
-                        <td className="py-3 px-4 text-right">
+                        <td className="py-3 px-4 text-right space-x-2">
+                          <button
+                            onClick={() => {
+                              setSelectedStudentForProfile(s);
+                              setProfileModalOpen(true);
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 text-xs font-medium rounded-lg transition-colors"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            <span>Profile</span>
+                          </button>
                           <button
                             onClick={() => {
                               setSelectedStudentForTransfer(s);
                               setTransferModalOpen(true);
                             }}
-                            className="inline-flex items-center gap-1 px-3 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 text-xs font-semibold rounded-lg transition-colors"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 text-xs font-semibold rounded-lg transition-colors"
                           >
                             <ArrowRightLeft className="w-3.5 h-3.5" />
-                            <span>Transfer Batch</span>
+                            <span>Transfer</span>
                           </button>
                         </td>
                       </tr>
@@ -749,21 +814,31 @@ export default function InstituteAdminDashboard() {
                           </td>
                           <td className="py-3 px-4 text-right space-x-2">
                             {!isFullyPaid && (
-                              <button
-                                onClick={() => {
-                                  setSelectedInvoiceForPayment(inv);
-                                  setPaymentForm({
-                                    amount: String((Number(inv.amount_due) - Number(inv.amount_paid)) / 100),
-                                    payment_mode: "cash",
-                                    reference_no: "",
-                                    notes: "",
-                                  });
-                                  setShowPaymentModal(true);
-                                }}
-                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition-colors"
-                              >
-                                Record Payment
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleSendFeeReminder(inv)}
+                                  disabled={sendingReminderId === inv.id}
+                                  className="px-2.5 py-1 bg-amber-600/10 hover:bg-amber-600 text-amber-400 hover:text-white border border-amber-500/20 text-xs font-semibold rounded-lg transition-colors inline-flex items-center gap-1"
+                                >
+                                  <Send className="w-3 h-3" />
+                                  <span>{sendingReminderId === inv.id ? "Sending..." : "Reminder"}</span>
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setSelectedInvoiceForPayment(inv);
+                                    setPaymentForm({
+                                      amount: String((Number(inv.amount_due) - Number(inv.amount_paid)) / 100),
+                                      payment_mode: "cash",
+                                      reference_no: "",
+                                      notes: "",
+                                    });
+                                    setShowPaymentModal(true);
+                                  }}
+                                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition-colors"
+                                >
+                                  Record Payment
+                                </button>
+                              </>
                             )}
 
                             <button
@@ -1384,6 +1459,13 @@ export default function InstituteAdminDashboard() {
         data={modalDocData}
         institute={institute}
         type={modalDocType}
+      />
+
+      {/* Student Profile & History Modal */}
+      <StudentProfileModal
+        isOpen={profileModalOpen}
+        onClose={() => setProfileModalOpen(false)}
+        student={selectedStudentForProfile}
       />
     </div>
   );
