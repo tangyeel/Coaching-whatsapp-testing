@@ -7,7 +7,8 @@ import Navbar from "@/components/Navbar";
 import ReportCardModal from "@/components/ReportCardModal";
 import {
   Calendar, Check, X, Send, Award, FileText,
-  Users, AlertCircle, Sparkles, CheckCircle2, Plus, UploadCloud
+  Users, AlertCircle, Sparkles, CheckCircle2, Plus, UploadCloud,
+  Download, TrendingUp, BarChart2
 } from "lucide-react";
 
 export default function TeacherPortal() {
@@ -317,6 +318,40 @@ export default function TeacherPortal() {
       }
     };
     reader.readAsArrayBuffer(file);
+  }
+
+  function handleExportMarksExcel() {
+    const curAssessment = assessments.find(a => a.id === selectedAssessmentId);
+    if (!curAssessment) return;
+
+    const rows = students.map(s => {
+      const score = marksState[s.id] ?? "";
+      const max = curAssessment.max_marks;
+      let grade = "—";
+      if (score !== "") {
+        const pct = (Number(score) / max) * 100;
+        if (pct >= 90) grade = "A+";
+        else if (pct >= 80) grade = "A";
+        else if (pct >= 70) grade = "B+";
+        else if (pct >= 60) grade = "B";
+        else if (pct >= 50) grade = "C";
+        else if (pct >= 35) grade = "D";
+        else grade = "F";
+      }
+      return {
+        "Roll No": s.roll_no || "",
+        "Student Name": s.full_name,
+        "Guardian Phone": s.guardian_phone,
+        "Marks Obtained": score,
+        "Max Marks": max,
+        "Grade": grade,
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Scores");
+    XLSX.writeFile(wb, `${curAssessment.title.replace(/[^a-z0-9]/gi, "_")}_Scores.xlsx`);
   }
 
   async function handleCreateAssessment(e) {
@@ -678,6 +713,14 @@ export default function TeacherPortal() {
                     className="hidden"
                   />
                   <button
+                    onClick={handleExportMarksExcel}
+                    disabled={!selectedAssessmentId}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Export (.xlsx)</span>
+                  </button>
+                  <button
                     onClick={() => setShowNewAssessment(true)}
                     className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl transition-colors"
                   >
@@ -687,24 +730,60 @@ export default function TeacherPortal() {
                 </div>
               </div>
 
-              {/* Assessment Table */}
-              {selectedAssessmentId ? (
-                <>
-                  <div className="border border-slate-800 rounded-xl overflow-hidden">
-                    <table className="w-full text-left text-sm">
-                      <thead className="bg-slate-950/70 text-slate-400 text-[10px] uppercase tracking-wider font-semibold">
-                        <tr>
-                          <th className="py-2.5 px-4">Roll</th>
-                          <th className="py-2.5 px-4">Student Name</th>
-                          <th className="py-2.5 px-4 text-right">Max Marks</th>
-                          <th className="py-2.5 px-4 text-center">Marks Obtained</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800/60">
-                        {students.map(s => {
-                          const curAssessment = assessments.find(a => a.id === selectedAssessmentId);
-                          const maxMarks = curAssessment?.max_marks || 100;
-                          return (
+              {/* Assessment Table & Analytics */}
+              {selectedAssessmentId ? (() => {
+                const curAssessment = assessments.find(a => a.id === selectedAssessmentId);
+                const enteredScores = Object.values(marksState).filter(v => v !== "" && v !== undefined).map(Number);
+                const avgScore = enteredScores.length > 0 ? (enteredScores.reduce((a, b) => a + b, 0) / enteredScores.length).toFixed(1) : 0;
+                const maxScore = enteredScores.length > 0 ? Math.max(...enteredScores) : 0;
+                const minScore = enteredScores.length > 0 ? Math.min(...enteredScores) : 0;
+                const passCount = enteredScores.filter(s => s >= ((curAssessment?.max_marks || 100) * 0.35)).length;
+                const passRate = enteredScores.length > 0 ? Math.round((passCount / enteredScores.length) * 100) : 0;
+
+                return (
+                  <>
+                    {/* Performance Analytics Cards */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl">
+                        <span className="text-[10px] font-semibold uppercase text-slate-500 block">Class Average</span>
+                        <div className="text-lg font-bold font-mono text-blue-400 mt-0.5">
+                          {avgScore} <span className="text-xs text-slate-500 font-normal">/ {curAssessment?.max_marks}</span>
+                        </div>
+                      </div>
+                      <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl">
+                        <span className="text-[10px] font-semibold uppercase text-slate-500 block">Highest Score</span>
+                        <div className="text-lg font-bold font-mono text-emerald-400 mt-0.5">
+                          {maxScore}
+                        </div>
+                      </div>
+                      <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl">
+                        <span className="text-[10px] font-semibold uppercase text-slate-500 block">Lowest Score</span>
+                        <div className="text-lg font-bold font-mono text-amber-400 mt-0.5">
+                          {minScore}
+                        </div>
+                      </div>
+                      <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl">
+                        <span className="text-[10px] font-semibold uppercase text-slate-500 block">Pass Rate (≥35%)</span>
+                        <div className="text-lg font-bold font-mono text-purple-400 mt-0.5">
+                          {passRate}%
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="border border-slate-800 rounded-xl overflow-hidden">
+                      <table className="w-full text-left text-sm">
+                        <thead className="bg-slate-950/70 text-slate-400 text-[10px] uppercase tracking-wider font-semibold">
+                          <tr>
+                            <th className="py-2.5 px-4">Roll</th>
+                            <th className="py-2.5 px-4">Student Name</th>
+                            <th className="py-2.5 px-4 text-right">Max Marks</th>
+                            <th className="py-2.5 px-4 text-center">Marks Obtained</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60">
+                          {students.map(s => {
+                            const maxMarks = curAssessment?.max_marks || 100;
+                            return (
                             <tr key={s.id} className="hover:bg-slate-800/30">
                               <td className="py-2.5 px-4 font-mono text-xs text-slate-500">{s.roll_no || "—"}</td>
                               <td className="py-2.5 px-4 font-medium text-slate-200">{s.full_name}</td>
@@ -751,7 +830,7 @@ export default function TeacherPortal() {
                     </div>
                   </div>
                 </>
-              ) : (
+              ); })() : (
                 <div className="py-12 text-center text-slate-500 text-xs">
                   No assessments created yet for this batch. Click "New Assessment" to begin.
                 </div>
