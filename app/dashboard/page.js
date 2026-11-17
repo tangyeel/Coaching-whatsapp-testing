@@ -5,11 +5,13 @@ import { createClient } from "@/lib/supabase/client";
 import Navbar from "@/components/Navbar";
 import InvoiceReceiptModal from "@/components/InvoiceReceiptModal";
 import TransferStudentModal from "@/components/TransferStudentModal";
+import ExcelStudentImportModal from "@/components/ExcelStudentImportModal";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
   Users, Layers, Receipt, Settings, Plus, Search,
   ArrowRightLeft, FileText, CheckCircle2, AlertCircle,
-  IndianRupee, Printer, Send, ShieldAlert, School, CreditCard
+  IndianRupee, Printer, Send, ShieldAlert, School, CreditCard,
+  UserPlus, UserCheck, MessageSquare, UploadCloud, X
 } from "lucide-react";
 
 export default function InstituteAdminDashboard() {
@@ -18,13 +20,15 @@ export default function InstituteAdminDashboard() {
   const [institute, setInstitute] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Tabs: "overview" | "batches" | "students" | "fees" | "settings"
+  // Tabs: "overview" | "batches" | "students" | "teachers" | "fees" | "messages" | "settings"
   const [activeTab, setActiveTab] = useState("overview");
 
   // Domain Data
   const [batches, setBatches] = useState([]);
   const [students, setStudents] = useState([]);
+  const [teachers, setTeachers] = useState([]);
   const [invoices, setInvoices] = useState([]);
+  const [messageJobs, setMessageJobs] = useState([]);
   const [searchStudent, setSearchStudent] = useState("");
   const [filterBatchId, setFilterBatchId] = useState("");
 
@@ -34,6 +38,7 @@ export default function InstituteAdminDashboard() {
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
   const [modalDocData, setModalDocData] = useState(null);
   const [modalDocType, setModalDocType] = useState("receipt");
+  const [showExcelImportModal, setShowExcelImportModal] = useState(false);
 
   // New Batch State
   const [showNewBatchModal, setShowNewBatchModal] = useState(false);
@@ -49,6 +54,22 @@ export default function InstituteAdminDashboard() {
     guardian_phone: "",
     guardian_name: "",
   });
+
+  // New Teacher State
+  const [showNewTeacherModal, setShowNewTeacherModal] = useState(false);
+  const [newTeacher, setNewTeacher] = useState({
+    full_name: "",
+    email: "",
+    password: "",
+    phone: "",
+    batch_ids: [],
+  });
+  const [creatingTeacher, setCreatingTeacher] = useState(false);
+
+  // Assign Teacher to Batch State
+  const [showAssignTeacherModal, setShowAssignTeacherModal] = useState(false);
+  const [selectedBatchForAssign, setSelectedBatchForAssign] = useState(null);
+  const [selectedTeacherIdToAssign, setSelectedTeacherIdToAssign] = useState("");
 
   // New Invoice State
   const [showNewInvoiceModal, setShowNewInvoiceModal] = useState(false);
@@ -113,7 +134,9 @@ export default function InstituteAdminDashboard() {
 
       fetchBatches();
       fetchStudents();
+      fetchTeachers();
       fetchInvoices();
+      fetchMessageJobs();
     }
     init();
   }, []);
@@ -134,6 +157,14 @@ export default function InstituteAdminDashboard() {
     } catch (err) { console.error(err); }
   }
 
+  async function fetchTeachers() {
+    try {
+      const res = await fetch("/api/teachers");
+      const json = await res.json();
+      if (json.data) setTeachers(json.data);
+    } catch (err) { console.error(err); }
+  }
+
   async function fetchInvoices() {
     try {
       const res = await fetch("/api/fees/invoices");
@@ -142,7 +173,15 @@ export default function InstituteAdminDashboard() {
     } catch (err) { console.error(err); }
   }
 
-  // --- Handlers: Batches ---
+  async function fetchMessageJobs() {
+    try {
+      const res = await fetch("/api/messages/history");
+      const json = await res.json();
+      if (json.data) setMessageJobs(json.data);
+    } catch (err) { console.error(err); }
+  }
+
+  // --- Handlers: Batches & Teachers ---
   async function handleCreateBatch(e) {
     e.preventDefault();
     if (!newBatchName.trim()) return;
@@ -157,6 +196,45 @@ export default function InstituteAdminDashboard() {
         setShowNewBatchModal(false);
         setNewBatchName("");
         fetchBatches();
+      } else { alert(json.error); }
+    } catch (err) { alert(err.message); }
+  }
+
+  async function handleCreateTeacher(e) {
+    e.preventDefault();
+    setCreatingTeacher(true);
+    try {
+      const res = await fetch("/api/teachers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newTeacher),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setShowNewTeacherModal(false);
+        setNewTeacher({ full_name: "", email: "", password: "", phone: "", batch_ids: [] });
+        fetchTeachers();
+        fetchBatches();
+        alert(json.message);
+      } else { alert(json.error); }
+    } catch (err) { alert(err.message); }
+    finally { setCreatingTeacher(false); }
+  }
+
+  async function handleAssignTeacher(e) {
+    e.preventDefault();
+    if (!selectedBatchForAssign || !selectedTeacherIdToAssign) return;
+    try {
+      const res = await fetch(`/api/batches/${selectedBatchForAssign.id}/teachers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ teacher_id: selectedTeacherIdToAssign }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setShowAssignTeacherModal(false);
+        fetchBatches();
+        fetchTeachers();
       } else { alert(json.error); }
     } catch (err) { alert(err.message); }
   }
@@ -215,7 +293,6 @@ export default function InstituteAdminDashboard() {
         setShowPaymentModal(false);
         setPaymentForm({ amount: "", payment_mode: "cash", reference_no: "", notes: "" });
         fetchInvoices();
-        // Immediately offer to preview / print receipt!
         setModalDocData(json.data);
         setModalDocType("receipt");
         setReceiptModalOpen(true);
@@ -245,6 +322,7 @@ export default function InstituteAdminDashboard() {
   // Computed Overview Metrics
   const totalStudents = students.length;
   const totalBatches = batches.length;
+  const totalTeachers = teachers.length;
   let totalRevenueCollectedPaise = 0;
   let totalRevenueDuePaise = 0;
   invoices.forEach(inv => {
@@ -278,7 +356,9 @@ export default function InstituteAdminDashboard() {
             { id: "overview", label: "Overview", icon: School },
             { id: "batches", label: "Batches", icon: Layers },
             { id: "students", label: "Students", icon: Users },
+            { id: "teachers", label: "Staff & Teachers", icon: UserCheck },
             { id: "fees", label: "Fees & Invoices", icon: Receipt },
+            { id: "messages", label: "WhatsApp Outbox", icon: MessageSquare },
             { id: "settings", label: "Institute Settings", icon: Settings },
           ].map(tab => {
             const TabIcon = tab.icon;
@@ -286,7 +366,7 @@ export default function InstituteAdminDashboard() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-5 py-2.5 text-xs font-semibold rounded-xl whitespace-nowrap transition-all ${
+                className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold rounded-xl whitespace-nowrap transition-all ${
                   activeTab === tab.id
                     ? "bg-blue-600 text-white shadow-lg shadow-blue-900/30"
                     : "text-slate-400 hover:text-white"
@@ -320,7 +400,7 @@ export default function InstituteAdminDashboard() {
                   <Layers className="w-4 h-4 text-emerald-400" />
                 </div>
                 <div className="text-3xl font-black text-white">{totalBatches}</div>
-                <div className="text-xs text-slate-500 mt-1">Coaching / Academic groups</div>
+                <div className="text-xs text-slate-500 mt-1">{totalTeachers} assigned teachers</div>
               </div>
 
               <div className="p-5 bg-slate-900 border border-slate-800 rounded-2xl">
@@ -348,14 +428,28 @@ export default function InstituteAdminDashboard() {
 
             {/* Quick Actions Card */}
             <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-              <h3 className="text-sm font-semibold text-white mb-4">Quick Actions</h3>
+              <h3 className="text-sm font-semibold text-white mb-4">Quick Operations</h3>
               <div className="flex flex-wrap gap-3">
                 <button
                   onClick={() => setShowNewStudentModal(true)}
                   className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl transition-all"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Enroll New Student</span>
+                  <span>Enroll Student</span>
+                </button>
+                <button
+                  onClick={() => setShowExcelImportModal(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl transition-all shadow-md shadow-emerald-900/20"
+                >
+                  <UploadCloud className="w-4 h-4" />
+                  <span>Import Students from Excel</span>
+                </button>
+                <button
+                  onClick={() => setShowNewTeacherModal(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold rounded-xl transition-all"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>Add Teacher Account</span>
                 </button>
                 <button
                   onClick={() => setShowNewBatchModal(true)}
@@ -363,13 +457,6 @@ export default function InstituteAdminDashboard() {
                 >
                   <Plus className="w-4 h-4" />
                   <span>Create Batch</span>
-                </button>
-                <button
-                  onClick={() => setShowNewInvoiceModal(true)}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition-all"
-                >
-                  <Receipt className="w-4 h-4" />
-                  <span>Issue Fee Invoice</span>
                 </button>
               </div>
             </div>
@@ -409,13 +496,25 @@ export default function InstituteAdminDashboard() {
                   </div>
 
                   <div className="border-t border-slate-800/80 pt-3">
-                    <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                      Assigned Teachers
+                    <div className="flex justify-between items-center mb-1.5">
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                        Assigned Teachers
+                      </span>
+                      <button
+                        onClick={() => {
+                          setSelectedBatchForAssign(b);
+                          setSelectedTeacherIdToAssign("");
+                          setShowAssignTeacherModal(true);
+                        }}
+                        className="text-[11px] text-blue-400 hover:text-blue-300 font-semibold"
+                      >
+                        + Assign
+                      </button>
                     </div>
                     <div className="text-xs text-slate-300">
                       {b.assigned_teachers?.length > 0
                         ? b.assigned_teachers.map(t => t.full_name).join(", ")
-                        : <span className="text-slate-500 italic">No teacher assigned</span>}
+                        : <span className="text-slate-500 italic">No teacher assigned yet</span>}
                     </div>
                   </div>
                 </div>
@@ -425,22 +524,31 @@ export default function InstituteAdminDashboard() {
         )}
 
         {/* ============================================================ */}
-        {/* TAB 3: STUDENTS DIRECTORY & TRANSFER SAFEGUARD               */}
+        {/* TAB 3: STUDENTS DIRECTORY & EXCEL IMPORT                     */}
         {/* ============================================================ */}
         {activeTab === "students" && (
           <div className="space-y-6 fade-in">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
                 <h2 className="text-lg font-bold text-white">Students Directory</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Search, enroll, and safely transfer students between batches</p>
+                <p className="text-xs text-slate-400 mt-0.5">Search, enroll, import via Excel, and transfer between batches</p>
               </div>
-              <button
-                onClick={() => setShowNewStudentModal(true)}
-                className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl transition-all"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Enroll Student</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowExcelImportModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl transition-all"
+                >
+                  <UploadCloud className="w-4 h-4" />
+                  <span>Import Excel</span>
+                </button>
+                <button
+                  onClick={() => setShowNewStudentModal(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Enroll Student</span>
+                </button>
+              </div>
             </div>
 
             {/* Filter & Search Bar */}
@@ -469,7 +577,7 @@ export default function InstituteAdminDashboard() {
             </div>
 
             {/* Students Table */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
               <table className="w-full text-left text-sm">
                 <thead className="bg-slate-950/70 text-slate-400 text-[10px] uppercase font-semibold">
                   <tr>
@@ -484,7 +592,7 @@ export default function InstituteAdminDashboard() {
                   {filteredStudents.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="py-8 text-center text-slate-500 text-xs">
-                        No students found matching your search.
+                        No students found matching your criteria.
                       </td>
                     </tr>
                   ) : (
@@ -520,7 +628,64 @@ export default function InstituteAdminDashboard() {
         )}
 
         {/* ============================================================ */}
-        {/* TAB 4: FEES, INVOICES & PAYMENT RECEIPTS                     */}
+        {/* TAB 4: TEACHERS & STAFF MANAGEMENT                           */}
+        {/* ============================================================ */}
+        {activeTab === "teachers" && (
+          <div className="space-y-6 fade-in">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-lg font-bold text-white">Teachers & Staff</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Manage instructor accounts and assigned rosters</p>
+              </div>
+              <button
+                onClick={() => setShowNewTeacherModal(true)}
+                className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold rounded-xl transition-all shadow-md shadow-purple-900/20"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>Add Teacher</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {teachers.map(t => {
+                const assignedBatchList = t.teacher_batch_assignments?.map(a => a.batches?.name).filter(Boolean) || [];
+                return (
+                  <div key={t.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="text-base font-bold text-white">{t.full_name}</h4>
+                        <span className="text-xs text-slate-400 font-mono">{t.email}</span>
+                      </div>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-semibold uppercase">
+                        Active
+                      </span>
+                    </div>
+
+                    <div className="border-t border-slate-800/80 pt-3">
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 block mb-1">
+                        Assigned Batches ({assignedBatchList.length})
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {assignedBatchList.length > 0 ? (
+                          assignedBatchList.map((bName, i) => (
+                            <span key={i} className="text-[11px] px-2 py-0.5 bg-slate-800 rounded-lg text-slate-200">
+                              {bName}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-xs text-slate-500 italic">No batches assigned</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================ */}
+        {/* TAB 5: FEES, INVOICES & PAYMENT RECEIPTS                     */}
         {/* ============================================================ */}
         {activeTab === "fees" && (
           <div className="space-y-6 fade-in">
@@ -539,7 +704,7 @@ export default function InstituteAdminDashboard() {
             </div>
 
             {/* Invoices Table */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
               <table className="w-full text-left text-sm">
                 <thead className="bg-slate-950/70 text-slate-400 text-[10px] uppercase font-semibold">
                   <tr>
@@ -623,7 +788,67 @@ export default function InstituteAdminDashboard() {
         )}
 
         {/* ============================================================ */}
-        {/* TAB 5: INSTITUTE & WHATSAPP SETTINGS                          */}
+        {/* TAB 6: WHATSAPP DISPATCH OUTBOX / AUDIT LOGS                 */}
+        {/* ============================================================ */}
+        {activeTab === "messages" && (
+          <div className="space-y-6 fade-in">
+            <div>
+              <h2 className="text-lg font-bold text-white">WhatsApp Outbox & Message History</h2>
+              <p className="text-xs text-slate-400 mt-0.5">Auditable log of marks alerts, absence notifications, and fee reminders</p>
+            </div>
+
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-950/70 text-slate-400 text-[10px] uppercase font-semibold">
+                  <tr>
+                    <th className="py-3 px-4">Date</th>
+                    <th className="py-3 px-4">Template</th>
+                    <th className="py-3 px-4 text-center">Status</th>
+                    <th className="py-3 px-4 text-center">Success / Failed</th>
+                    <th className="py-3 px-4">Dispatched By</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {messageJobs.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-8 text-center text-slate-500 text-xs">
+                        No WhatsApp message jobs recorded yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    messageJobs.map(job => (
+                      <tr key={job.id} className="hover:bg-slate-800/30">
+                        <td className="py-3 px-4 text-xs font-mono text-slate-400">
+                          {formatDate(job.created_at)}
+                        </td>
+                        <td className="py-3 px-4 font-mono text-xs font-bold text-blue-400">
+                          {job.template_key}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="inline-block px-2.5 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-500/10 text-emerald-400">
+                            {job.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center font-mono text-xs">
+                          <span className="text-emerald-400 font-bold">{job.success_count}</span>
+                          {" / "}
+                          <span className="text-rose-400 font-bold">{job.failed_count}</span>
+                          <span className="text-slate-500"> ({job.total_count} total)</span>
+                        </td>
+                        <td className="py-3 px-4 text-xs text-slate-300">
+                          {job.creator?.full_name || "Admin"}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================ */}
+        {/* TAB 7: INSTITUTE & WHATSAPP SETTINGS                          */}
         {/* ============================================================ */}
         {activeTab === "settings" && (
           <div className="space-y-6 fade-in max-w-2xl">
@@ -855,6 +1080,136 @@ export default function InstituteAdminDashboard() {
         </div>
       )}
 
+      {/* Modal: Add Teacher */}
+      {showNewTeacherModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+              <h3 className="font-semibold text-sm text-white">Create Teacher Account</h3>
+              <button onClick={() => setShowNewTeacherModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateTeacher} className="space-y-3">
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Prof. Rajesh Verma"
+                  value={newTeacher.full_name}
+                  onChange={e => setNewTeacher({ ...newTeacher, full_name: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Email</label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="teacher@school.com"
+                    value={newTeacher.email}
+                    onChange={e => setNewTeacher({ ...newTeacher, email: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Password</label>
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    placeholder="••••••••"
+                    value={newTeacher.password}
+                    onChange={e => setNewTeacher({ ...newTeacher, password: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Assign Initial Batches</label>
+                <div className="max-h-32 overflow-y-auto space-y-1 bg-slate-950 p-2 rounded-xl border border-slate-800">
+                  {batches.map(b => (
+                    <label key={b.id} className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newTeacher.batch_ids.includes(b.id)}
+                        onChange={e => {
+                          if (e.target.checked) {
+                            setNewTeacher({ ...newTeacher, batch_ids: [...newTeacher.batch_ids, b.id] });
+                          } else {
+                            setNewTeacher({ ...newTeacher, batch_ids: newTeacher.batch_ids.filter(id => id !== b.id) });
+                          }
+                        }}
+                        className="rounded border-slate-700 bg-slate-800 text-purple-600 focus:ring-0"
+                      />
+                      <span>{b.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowNewTeacherModal(false)}
+                  className="flex-1 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingTeacher}
+                  className="flex-1 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-slate-800 text-white rounded-xl text-xs font-bold"
+                >
+                  {creatingTeacher ? "Creating..." : "Create Teacher"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Assign Teacher to Batch */}
+      {showAssignTeacherModal && selectedBatchForAssign && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="font-semibold text-sm text-white">Assign Teacher to {selectedBatchForAssign.name}</h3>
+            <form onSubmit={handleAssignTeacher} className="space-y-3">
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Select Teacher</label>
+                <select
+                  required
+                  value={selectedTeacherIdToAssign}
+                  onChange={e => setSelectedTeacherIdToAssign(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">Choose teacher...</option>
+                  {teachers.map(t => (
+                    <option key={t.id} value={t.id}>{t.full_name} ({t.email})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAssignTeacherModal(false)}
+                  className="flex-1 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs"
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="flex-1 py-2 bg-blue-600 text-white rounded-xl text-xs font-semibold">
+                  Confirm Assign
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Modal: Issue Invoice */}
       {showNewInvoiceModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
@@ -998,6 +1353,17 @@ export default function InstituteAdminDashboard() {
           </div>
         </div>
       )}
+
+      {/* Excel Bulk Import Modal */}
+      <ExcelStudentImportModal
+        isOpen={showExcelImportModal}
+        onClose={() => setShowExcelImportModal(false)}
+        batches={batches}
+        onImportSuccess={() => {
+          fetchStudents();
+          fetchBatches();
+        }}
+      />
 
       {/* Transfer Student Safeguard Modal */}
       <TransferStudentModal
