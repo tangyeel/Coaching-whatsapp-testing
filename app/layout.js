@@ -1,4 +1,5 @@
 import "./globals.css";
+import { ToastContainer } from "@/components/Toast";
 
 export const metadata = {
   title: "School & Coaching Portal",
@@ -10,6 +11,7 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <body className="bg-slate-950 text-slate-100 min-h-screen antialiased selection:bg-blue-600 selection:text-white">
         {children}
+        <ToastContainer />
       </body>
     </html>
   );

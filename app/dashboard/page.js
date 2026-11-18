@@ -7,6 +7,8 @@ import InvoiceReceiptModal from "@/components/InvoiceReceiptModal";
 import TransferStudentModal from "@/components/TransferStudentModal";
 import ExcelStudentImportModal from "@/components/ExcelStudentImportModal";
 import StudentProfileModal from "@/components/StudentProfileModal";
+import OnboardingChecklist from "@/components/OnboardingChecklist";
+import { toast } from "@/components/Toast";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import {
   Users, Layers, Receipt, Settings, Plus, Search,
@@ -14,7 +16,9 @@ import {
   IndianRupee, Printer, Send, ShieldAlert, School, CreditCard,
   UserPlus, UserCheck, MessageSquare, UploadCloud, X,
   Archive, RotateCcw, AlertTriangle, KeyRound, Sparkles, Sliders,
-  Palette, Image as ImageIcon, ExternalLink, Lock
+  Palette, Image as ImageIcon, ExternalLink, Lock, ArrowUpDown,
+  ArrowUp, ArrowDown, ChevronLeft, ChevronRight, FileSpreadsheet,
+  Check, Filter, Calendar
 } from "lucide-react";
 
 export default function InstituteAdminDashboard() {
@@ -34,6 +38,26 @@ export default function InstituteAdminDashboard() {
   const [messageJobs, setMessageJobs] = useState([]);
   const [searchStudent, setSearchStudent] = useState("");
   const [filterBatchId, setFilterBatchId] = useState("");
+
+  // Student Table Pagination & Sort States
+  const STUDENTS_PER_PAGE = 25;
+  const [studentPage, setStudentPage] = useState(1);
+  const [studentSortField, setStudentSortField] = useState("full_name"); // "full_name" | "roll_no" | "batch"
+  const [studentSortDir, setStudentSortDir] = useState("asc"); // "asc" | "desc"
+
+  // Fee Tab Sticky Filter States
+  const [feeFilterBatchId, setFeeFilterBatchId] = useState("");
+  const [feeFilterStatus, setFeeFilterStatus] = useState(""); // "" | "unpaid" | "partial" | "paid"
+
+  // Bulk Invoice by Batch State
+  const [showBulkInvoiceModal, setShowBulkInvoiceModal] = useState(false);
+  const [bulkInvoice, setBulkInvoice] = useState({
+    batch_id: "",
+    title: "Monthly Tuition Fee",
+    amount_due: "",
+    due_date: new Date().toISOString().split("T")[0],
+  });
+  const [creatingBulkInvoice, setCreatingBulkInvoice] = useState(false);
 
   // Archive & Soft Delete States
   const [showArchivedStudents, setShowArchivedStudents] = useState(false);
@@ -224,8 +248,13 @@ export default function InstituteAdminDashboard() {
         setShowNewBatchModal(false);
         setNewBatchName("");
         fetchBatches(showArchivedBatches);
-      } else { alert(json.error); }
-    } catch (err) { alert(err.message); }
+        toast.success("Batch created successfully!");
+      } else {
+        toast.error(json.error || "Failed to create batch");
+      }
+    } catch (err) {
+      toast.error(err.message);
+    }
   }
 
   async function handleArchiveBatch(batch) {
@@ -235,8 +264,13 @@ export default function InstituteAdminDashboard() {
       if (json.success) {
         setArchiveModalBatch(null);
         fetchBatches(showArchivedBatches);
-      } else { alert(json.error); }
-    } catch (err) { alert(err.message); }
+        toast.success(`Batch "${batch.name}" archived`);
+      } else {
+        toast.error(json.error || "Failed to archive batch");
+      }
+    } catch (err) {
+      toast.error(err.message);
+    }
   }
 
   async function handleRestoreBatch(batch) {
@@ -249,8 +283,13 @@ export default function InstituteAdminDashboard() {
       const json = await res.json();
       if (json.success) {
         fetchBatches(showArchivedBatches);
-      } else { alert(json.error); }
-    } catch (err) { alert(err.message); }
+        toast.success(`Batch "${batch.name}" restored`);
+      } else {
+        toast.error(json.error || "Failed to restore batch");
+      }
+    } catch (err) {
+      toast.error(err.message);
+    }
   }
 
   async function handleCreateTeacher(e) {
@@ -268,10 +307,15 @@ export default function InstituteAdminDashboard() {
         setNewTeacher({ full_name: "", email: "", password: "", phone: "", batch_ids: [] });
         fetchTeachers();
         fetchBatches(showArchivedBatches);
-        alert(json.message);
-      } else { alert(json.error); }
-    } catch (err) { alert(err.message); }
-    finally { setCreatingTeacher(false); }
+        toast.success(json.message || "Teacher account created!");
+      } else {
+        toast.error(json.error || "Failed to create teacher");
+      }
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setCreatingTeacher(false);
+    }
   }
 
   async function handleAssignTeacher(e) {
@@ -288,8 +332,13 @@ export default function InstituteAdminDashboard() {
         setShowAssignTeacherModal(false);
         fetchBatches(showArchivedBatches);
         fetchTeachers();
-      } else { alert(json.error); }
-    } catch (err) { alert(err.message); }
+        toast.success("Teacher assigned to batch successfully!");
+      } else {
+        toast.error(json.error || "Failed to assign teacher");
+      }
+    } catch (err) {
+      toast.error(err.message);
+    }
   }
 
   // --- Handlers: Students & Soft Delete ---
@@ -307,8 +356,13 @@ export default function InstituteAdminDashboard() {
         setNewStudent({ batch_id: "", full_name: "", roll_no: "", guardian_phone: "", guardian_name: "" });
         fetchStudents(showArchivedStudents);
         fetchBatches(showArchivedBatches);
-      } else { alert(json.error); }
-    } catch (err) { alert(err.message); }
+        toast.success("Student enrolled successfully!");
+      } else {
+        toast.error(json.error || "Failed to enroll student");
+      }
+    } catch (err) {
+      toast.error(err.message);
+    }
   }
 
   async function handleArchiveStudent(student) {
@@ -319,8 +373,13 @@ export default function InstituteAdminDashboard() {
         setArchiveModalStudent(null);
         fetchStudents(showArchivedStudents);
         fetchBatches(showArchivedBatches);
-      } else { alert(json.error); }
-    } catch (err) { alert(err.message); }
+        toast.success(`Student ${student.full_name} archived`);
+      } else {
+        toast.error(json.error || "Failed to archive student");
+      }
+    } catch (err) {
+      toast.error(err.message);
+    }
   }
 
   async function handleRestoreStudent(student) {
@@ -334,8 +393,13 @@ export default function InstituteAdminDashboard() {
       if (json.success) {
         fetchStudents(showArchivedStudents);
         fetchBatches(showArchivedBatches);
-      } else { alert(json.error); }
-    } catch (err) { alert(err.message); }
+        toast.success(`Student ${student.full_name} restored`);
+      } else {
+        toast.error(json.error || "Failed to restore student");
+      }
+    } catch (err) {
+      toast.error(err.message);
+    }
   }
 
   // --- Handlers: Invoices & Payments ---
@@ -352,8 +416,52 @@ export default function InstituteAdminDashboard() {
         setShowNewInvoiceModal(false);
         setNewInvoice({ student_id: "", title: "Tuition Fee", amount_due: "", due_date: new Date().toISOString().split("T")[0] });
         fetchInvoices();
-      } else { alert(json.error); }
-    } catch (err) { alert(err.message); }
+        toast.success("Fee invoice generated successfully!");
+      } else {
+        toast.error(json.error || "Failed to create invoice");
+      }
+    } catch (err) {
+      toast.error(err.message);
+    }
+  }
+
+  async function handleCreateBulkInvoice(e) {
+    e.preventDefault();
+    if (!bulkInvoice.batch_id || !bulkInvoice.title.trim() || !bulkInvoice.amount_due || !bulkInvoice.due_date) {
+      toast.error("Please fill in all bulk invoice fields");
+      return;
+    }
+    setCreatingBulkInvoice(true);
+    try {
+      const res = await fetch("/api/fees/invoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bulk_batch_id: bulkInvoice.batch_id,
+          title: bulkInvoice.title.trim(),
+          amount_due: bulkInvoice.amount_due,
+          due_date: bulkInvoice.due_date,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setShowBulkInvoiceModal(false);
+        setBulkInvoice({
+          batch_id: "",
+          title: "Monthly Tuition Fee",
+          amount_due: "",
+          due_date: new Date().toISOString().split("T")[0],
+        });
+        fetchInvoices();
+        toast.success(`✔ Generated ${json.createdCount} fee invoices for cohort!`);
+      } else {
+        toast.error(json.error || "Failed to generate bulk invoices");
+      }
+    } catch (err) {
+      toast.error(`Error: ${err.message}`);
+    } finally {
+      setCreatingBulkInvoice(false);
+    }
   }
 
   async function handleRecordPayment(e) {
@@ -376,8 +484,13 @@ export default function InstituteAdminDashboard() {
         setModalDocData(json.data);
         setModalDocType("receipt");
         setReceiptModalOpen(true);
-      } else { alert(json.error); }
-    } catch (err) { alert(err.message); }
+        toast.success("Payment recorded & receipt generated!");
+      } else {
+        toast.error(json.error || "Failed to record payment");
+      }
+    } catch (err) {
+      toast.error(err.message);
+    }
   }
 
   async function handleSendFeeReminder(inv) {
@@ -408,16 +521,16 @@ export default function InstituteAdminDashboard() {
 
       const json = await res.json();
       if (json.success && json.successCount > 0) {
-        alert(`✔ WhatsApp fee reminder sent to ${inv.student?.guardian_phone}`);
+        toast.success(`✔ WhatsApp fee reminder sent to ${inv.student?.guardian_phone}`);
         if (json.usedThisMonth !== undefined && institute) {
           setInstitute({ ...institute, messages_sent_this_month: json.usedThisMonth });
         }
         fetchMessageJobs();
       } else {
-        alert(`✘ Failed to send: ${json.error || "WhatsApp dispatch error"}`);
+        toast.error(`✘ Failed to send: ${json.error || "WhatsApp dispatch error"}`);
       }
     } catch (err) {
-      alert(`✘ Error: ${err.message}`);
+      toast.error(`✘ Error: ${err.message}`);
     } finally {
       setSendingReminderId(null);
     }
@@ -436,17 +549,22 @@ export default function InstituteAdminDashboard() {
       const json = await res.json();
       if (json.success) {
         setInstitute(json.data);
-        alert("Basic institute settings updated!");
-      } else { alert(json.error); }
-    } catch (err) { alert(err.message); }
-    finally { setIsSavingSettings(false); }
+        toast.success("Campus details updated successfully!");
+      } else {
+        toast.error(json.error || "Failed to update settings");
+      }
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setIsSavingSettings(false);
+    }
   }
 
   async function handleLogoSelect(e) {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) {
-      alert("Logo must be under 2MB");
+      toast.error("Logo must be under 2MB");
       return;
     }
     setLogoFile(file);
@@ -473,12 +591,13 @@ export default function InstituteAdminDashboard() {
           setInstitute(prev => ({ ...prev, logo_url: json.logo_url, banner_color: json.banner_color }));
         }
         setBrandingSuccess("Branding successfully updated and active on all receipts & report cards!");
+        toast.success("Institute branding saved!");
         setTimeout(() => setBrandingSuccess(""), 4000);
       } else {
-        alert(json.error || "Failed to update branding");
+        toast.error(json.error || "Failed to update branding");
       }
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setIsSavingBranding(false);
     }
@@ -497,11 +616,12 @@ export default function InstituteAdminDashboard() {
       if (json.success) {
         setFeeAutopilot(nextVal);
         setInstitute(prev => ({ ...prev, fee_reminder_autopilot: nextVal }));
+        toast.success(nextVal ? "Fee Reminder Autopilot Activated (Daily 12 PM IST)" : "Fee Reminder Autopilot Paused");
       } else {
-        alert(json.error);
+        toast.error(json.error || "Failed to update autopilot");
       }
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setIsUpdatingAutopilot(false);
     }
@@ -510,7 +630,7 @@ export default function InstituteAdminDashboard() {
   async function handleTestWhatsApp(e) {
     e.preventDefault();
     if (!testPhone.trim()) {
-      alert("Please provide a destination phone number");
+      toast.error("Please provide a destination phone number");
       return;
     }
     setTestingConnection(true);
@@ -547,6 +667,11 @@ export default function InstituteAdminDashboard() {
 
   const supportEmail = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "support@schoolportal.com";
 
+  // Reset student pagination when filters change
+  useEffect(() => {
+    setStudentPage(1);
+  }, [searchStudent, filterBatchId, showArchivedStudents]);
+
   // Computed Overview Metrics
   const totalStudents = students.filter(s => !s.deleted_at && s.is_active).length;
   const totalBatches = batches.filter(b => !b.deleted_at && b.is_active).length;
@@ -558,11 +683,80 @@ export default function InstituteAdminDashboard() {
     totalRevenueDuePaise += Number(inv.amount_due || 0);
   });
 
+  // Overview Command Center Action Items
+  const todayStr = new Date().toISOString().split("T")[0];
+  const overdueInvoices = invoices.filter(inv => inv.status !== "paid" && inv.due_date < todayStr);
+  const dueSoonInvoices = invoices.filter(inv => {
+    if (inv.status === "paid" || inv.due_date < todayStr) return false;
+    const dueTime = new Date(inv.due_date).getTime();
+    const nowTime = new Date(todayStr).getTime();
+    const diffDays = Math.ceil((dueTime - nowTime) / (1000 * 60 * 60 * 24));
+    return diffDays <= 7;
+  });
+
+  const totalOverdueBalancePaise = overdueInvoices.reduce(
+    (sum, inv) => sum + Math.max(0, Number(inv.amount_due) - Number(inv.amount_paid)),
+    0
+  );
+  const totalDueSoonBalancePaise = dueSoonInvoices.reduce(
+    (sum, inv) => sum + Math.max(0, Number(inv.amount_due) - Number(inv.amount_paid)),
+    0
+  );
+
+  const unassignedStudents = students.filter(s => !s.deleted_at && !s.batch_id);
+
+  // Student Filter, Sort, & Pagination
   const filteredStudents = students.filter(s => {
     const matchesSearch = s.full_name?.toLowerCase().includes(searchStudent.toLowerCase()) ||
       s.guardian_phone?.includes(searchStudent) || s.roll_no?.includes(searchStudent);
     const matchesBatch = filterBatchId ? s.batch_id === filterBatchId : true;
     return matchesSearch && matchesBatch;
+  });
+
+  function toggleStudentSort(field) {
+    if (studentSortField === field) {
+      setStudentSortDir(prev => prev === "asc" ? "desc" : "asc");
+    } else {
+      setStudentSortField(field);
+      setStudentSortDir("asc");
+    }
+    setStudentPage(1);
+  }
+
+  const sortedStudents = [...filteredStudents].sort((a, b) => {
+    let aVal = "", bVal = "";
+    if (studentSortField === "roll_no") {
+      aVal = String(a.roll_no || "");
+      bVal = String(b.roll_no || "");
+    } else if (studentSortField === "batch") {
+      aVal = a.batches?.name || "";
+      bVal = b.batches?.name || "";
+    } else {
+      aVal = a.full_name || "";
+      bVal = b.full_name || "";
+    }
+    const cmp = aVal.localeCompare(bVal, undefined, { numeric: true, sensitivity: "base" });
+    return studentSortDir === "asc" ? cmp : -cmp;
+  });
+
+  const totalStudentPages = Math.max(1, Math.ceil(sortedStudents.length / STUDENTS_PER_PAGE));
+  const paginatedStudents = sortedStudents.slice(
+    (studentPage - 1) * STUDENTS_PER_PAGE,
+    studentPage * STUDENTS_PER_PAGE
+  );
+
+  // Fee Tab Sticky Filtered Invoices
+  const filteredInvoices = invoices.filter(inv => {
+    const matchesBatch = feeFilterBatchId ? inv.student?.batches?.name && batches.find(b => b.id === feeFilterBatchId)?.name === inv.student?.batches?.name : true;
+    const matchesStatus = feeFilterStatus ? inv.status === feeFilterStatus : true;
+    return matchesBatch && matchesStatus;
+  });
+
+  let filteredFeeDuePaise = 0;
+  let filteredFeePaidPaise = 0;
+  filteredInvoices.forEach(inv => {
+    filteredFeeDuePaise += Number(inv.amount_due || 0);
+    filteredFeePaidPaise += Number(inv.amount_paid || 0);
   });
 
   if (loading) {
@@ -608,10 +802,19 @@ export default function InstituteAdminDashboard() {
         </div>
 
         {/* ============================================================ */}
-        {/* TAB 1: OVERVIEW METRICS                                      */}
+        {/* TAB 1: OVERVIEW METRICS & COMMAND CENTER                     */}
         {/* ============================================================ */}
         {activeTab === "overview" && (
           <div className="space-y-6 fade-in">
+            {/* Onboarding Checklist for campus setup */}
+            <OnboardingChecklist
+              institute={institute}
+              students={students}
+              batches={batches}
+              invoices={invoices}
+              onNavigate={(tab) => setActiveTab(tab)}
+            />
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="p-5 bg-slate-900 border border-slate-800 rounded-2xl">
                 <div className="flex items-center justify-between text-slate-400 mb-2">
@@ -652,6 +855,154 @@ export default function InstituteAdminDashboard() {
               </div>
             </div>
 
+            {/* Daily Operations Command Center */}
+            <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 text-blue-400" />
+                    <span>Daily Operations Command Center</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Live operational telemetry and urgent items requiring attention today
+                  </p>
+                </div>
+                <span className="text-[11px] font-mono text-slate-400 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
+                  {formatDate(todayStr)}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Alert 1: Overdue Invoices */}
+                <div className={`p-4 rounded-xl border flex flex-col justify-between ${
+                  overdueInvoices.length > 0
+                    ? "bg-rose-500/10 border-rose-500/20 text-rose-300"
+                    : "bg-slate-950 border-slate-800/80 text-slate-400"
+                }`}>
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold uppercase tracking-wider">Overdue Fees</span>
+                      {overdueInvoices.length > 0 ? (
+                        <AlertCircle className="w-4 h-4 text-rose-400" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      )}
+                    </div>
+                    <div className="text-2xl font-black mt-2 font-mono text-white">
+                      {overdueInvoices.length} {overdueInvoices.length === 1 ? "Bill" : "Bills"}
+                    </div>
+                    <div className="text-xs mt-1">
+                      {overdueInvoices.length > 0 ? (
+                        <span className="text-rose-400 font-semibold">{formatCurrency(totalOverdueBalancePaise)} unpaid</span>
+                      ) : (
+                        <span className="text-emerald-400 font-medium">Zero past-due invoices</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {overdueInvoices.length > 0 && (
+                    <button
+                      onClick={() => {
+                        setFeeFilterStatus("unpaid");
+                        setActiveTab("fees");
+                      }}
+                      className="mt-4 text-xs font-semibold text-rose-300 hover:text-white flex items-center gap-1 transition-colors"
+                    >
+                      <span>Collect Overdue Bills</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Alert 2: Due Soon (Next 7 Days) */}
+                <div className={`p-4 rounded-xl border flex flex-col justify-between ${
+                  dueSoonInvoices.length > 0
+                    ? "bg-amber-500/10 border-amber-500/20 text-amber-300"
+                    : "bg-slate-950 border-slate-800/80 text-slate-400"
+                }`}>
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold uppercase tracking-wider">Upcoming Fees (7 Days)</span>
+                      <Calendar className="w-4 h-4 text-amber-400" />
+                    </div>
+                    <div className="text-2xl font-black mt-2 font-mono text-white">
+                      {dueSoonInvoices.length} {dueSoonInvoices.length === 1 ? "Bill" : "Bills"}
+                    </div>
+                    <div className="text-xs mt-1">
+                      {dueSoonInvoices.length > 0 ? (
+                        <span className="text-amber-400 font-semibold">{formatCurrency(totalDueSoonBalancePaise)} coming due</span>
+                      ) : (
+                        <span className="text-slate-400">No invoices due within 7 days</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {dueSoonInvoices.length > 0 && (
+                    <button
+                      onClick={() => setActiveTab("fees")}
+                      className="mt-4 text-xs font-semibold text-amber-300 hover:text-white flex items-center gap-1 transition-colors"
+                    >
+                      <span>Review Upcoming Bills</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Alert 3: WhatsApp Quota Health */}
+                <div className={`p-4 rounded-xl border flex flex-col justify-between ${
+                  isQuotaReached
+                    ? "bg-rose-500/10 border-rose-500/20 text-rose-300"
+                    : usagePercentage >= 80
+                    ? "bg-amber-500/10 border-amber-500/20 text-amber-300"
+                    : "bg-slate-950 border-slate-800/80 text-slate-400"
+                }`}>
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold uppercase tracking-wider">WhatsApp Allowance</span>
+                      <MessageSquare className="w-4 h-4 text-blue-400" />
+                    </div>
+                    <div className="text-2xl font-black mt-2 font-mono text-white">
+                      {messagesUsedThisMonth} <span className="text-xs font-normal text-slate-400">/ {effectiveLimit === 0 ? "∞" : effectiveLimit}</span>
+                    </div>
+                    <div className="text-xs mt-1">
+                      {isQuotaReached ? (
+                        <span className="text-rose-400 font-bold">Monthly limit reached</span>
+                      ) : (
+                        <span className={usagePercentage >= 80 ? "text-amber-400 font-semibold" : "text-emerald-400 font-medium"}>
+                          {effectiveLimit > 0 ? `${100 - usagePercentage}% balance remaining` : "Unlimited Plan"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setActiveTab("messages")}
+                    className="mt-4 text-xs font-semibold text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
+                  >
+                    <span>View Dispatch Outbox</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {unassignedStudents.length > 0 && (
+                <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs text-blue-300 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4 text-blue-400 shrink-0" />
+                    <span>
+                      <strong>{unassignedStudents.length}</strong> enrolled {unassignedStudents.length === 1 ? "student has" : "students have"} not been assigned to an academic batch.
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setActiveTab("students")}
+                    className="text-xs font-bold text-blue-400 hover:underline shrink-0"
+                  >
+                    Assign Batches →
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Quick Actions Panel */}
             <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-4">
               <h3 className="text-sm font-bold text-white uppercase tracking-wider">Quick Institute Actions</h3>
@@ -671,8 +1022,15 @@ export default function InstituteAdminDashboard() {
                   <span>Import Students from Excel</span>
                 </button>
                 <button
+                  onClick={() => setShowBulkInvoiceModal(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold rounded-xl transition-all shadow-md shadow-purple-900/20"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>Bulk Issue Invoices</span>
+                </button>
+                <button
                   onClick={() => setShowNewTeacherModal(true)}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold rounded-xl transition-all"
+                  className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition-all"
                 >
                   <UserPlus className="w-4 h-4" />
                   <span>Add Teacher Account</span>
@@ -876,22 +1234,58 @@ export default function InstituteAdminDashboard() {
               <table className="w-full text-left text-sm">
                 <thead className="bg-slate-950/70 text-slate-400 text-[10px] uppercase font-semibold">
                   <tr>
-                    <th className="py-3 px-4">Roll</th>
-                    <th className="py-3 px-4">Student Name</th>
-                    <th className="py-3 px-4">Batch</th>
+                    <th
+                      onClick={() => toggleStudentSort("roll_no")}
+                      className="py-3 px-4 cursor-pointer select-none group hover:text-white transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>Roll</span>
+                        {studentSortField === "roll_no" ? (
+                          studentSortDir === "asc" ? <ArrowUp className="w-3 h-3 text-blue-400" /> : <ArrowDown className="w-3 h-3 text-blue-400" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 text-slate-600 group-hover:text-slate-400" />
+                        )}
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => toggleStudentSort("full_name")}
+                      className="py-3 px-4 cursor-pointer select-none group hover:text-white transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>Student Name</span>
+                        {studentSortField === "full_name" ? (
+                          studentSortDir === "asc" ? <ArrowUp className="w-3 h-3 text-blue-400" /> : <ArrowDown className="w-3 h-3 text-blue-400" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 text-slate-600 group-hover:text-slate-400" />
+                        )}
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => toggleStudentSort("batch")}
+                      className="py-3 px-4 cursor-pointer select-none group hover:text-white transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>Batch</span>
+                        {studentSortField === "batch" ? (
+                          studentSortDir === "asc" ? <ArrowUp className="w-3 h-3 text-blue-400" /> : <ArrowDown className="w-3 h-3 text-blue-400" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 text-slate-600 group-hover:text-slate-400" />
+                        )}
+                      </div>
+                    </th>
                     <th className="py-3 px-4">Guardian Contact</th>
                     <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
-                  {filteredStudents.length === 0 ? (
+                  {paginatedStudents.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="py-8 text-center text-slate-500 text-xs">
                         No students found matching your criteria.
                       </td>
                     </tr>
                   ) : (
-                    filteredStudents.map(s => {
+                    paginatedStudents.map(s => {
                       const isArchived = Boolean(s.deleted_at);
                       return (
                         <tr
@@ -971,6 +1365,48 @@ export default function InstituteAdminDashboard() {
                   )}
                 </tbody>
               </table>
+
+              {/* Pagination Controls */}
+              {sortedStudents.length > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-slate-950/70 border-t border-slate-800 text-xs text-slate-400">
+                  <div>
+                    Showing{" "}
+                    <span className="font-semibold text-white">
+                      {((studentPage - 1) * STUDENTS_PER_PAGE) + 1}
+                    </span>{" "}
+                    to{" "}
+                    <span className="font-semibold text-white">
+                      {Math.min(studentPage * STUDENTS_PER_PAGE, sortedStudents.length)}
+                    </span>{" "}
+                    of{" "}
+                    <span className="font-semibold text-white font-mono">{sortedStudents.length}</span> students
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setStudentPage(p => Math.max(1, p - 1))}
+                      disabled={studentPage === 1}
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-800 bg-slate-900 text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-1"
+                    >
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                      <span>Prev</span>
+                    </button>
+
+                    <span className="px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 font-mono text-[11px] text-slate-300">
+                      {studentPage} / {totalStudentPages}
+                    </span>
+
+                    <button
+                      onClick={() => setStudentPage(p => Math.min(totalStudentPages, p + 1))}
+                      disabled={studentPage >= totalStudentPages}
+                      className="px-2.5 py-1.5 rounded-lg border border-slate-800 bg-slate-900 text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-1"
+                    >
+                      <span>Next</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1049,14 +1485,76 @@ export default function InstituteAdminDashboard() {
                 <h2 className="text-lg font-bold text-white">Fee Invoices & Payments</h2>
                 <p className="text-xs text-slate-400 mt-0.5">Issue tuition invoices, collect payments, and print branded receipts</p>
               </div>
-              <button
-                onClick={() => setShowNewInvoiceModal(true)}
-                className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl transition-all shadow-md shadow-blue-900/20"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Issue Fee Invoice</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowBulkInvoiceModal(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold rounded-xl transition-all shadow-md shadow-purple-900/20"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>Bulk Issue by Batch</span>
+                </button>
+                <button
+                  onClick={() => setShowNewInvoiceModal(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl transition-all shadow-md shadow-blue-900/20"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Issue Fee Invoice</span>
+                </button>
+              </div>
             </div>
+
+            {/* Filter Bar: Batch & Status */}
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-3 bg-slate-900 p-3 rounded-2xl border border-slate-800">
+              <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                <div className="flex items-center gap-2">
+                  <Filter className="w-3.5 h-3.5 text-slate-500" />
+                  <span className="text-xs text-slate-400 font-medium">Batch:</span>
+                  <select
+                    value={feeFilterBatchId}
+                    onChange={e => setFeeFilterBatchId(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="">All Batches</option>
+                    {batches.map(b => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400 font-medium">Status:</span>
+                  <select
+                    value={feeFilterStatus}
+                    onChange={e => setFeeFilterStatus(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="">All Statuses</option>
+                    <option value="unpaid">Unpaid Only</option>
+                    <option value="partial">Partially Paid</option>
+                    <option value="paid">Fully Paid</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="text-xs text-slate-400 font-mono">
+                Showing <span className="text-white font-bold">{filteredInvoices.length}</span> of {invoices.length} invoices
+              </div>
+            </div>
+
+            {/* Cohort Financial Summary Banner (if batch filter active) */}
+            {feeFilterBatchId && (
+              <div className="p-3.5 bg-slate-900 border border-slate-800 rounded-xl flex flex-wrap items-center justify-between text-xs gap-3">
+                <span className="font-semibold text-blue-400 flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Batch Ledger: {batches.find(b => b.id === feeFilterBatchId)?.name}</span>
+                </span>
+                <div className="flex items-center gap-4 font-mono">
+                  <span>Due: <strong className="text-white">{formatCurrency(filteredFeeDuePaise)}</strong></span>
+                  <span>Paid: <strong className="text-emerald-400">{formatCurrency(filteredFeePaidPaise)}</strong></span>
+                  <span>Outstanding: <strong className="text-amber-400">{formatCurrency(Math.max(0, filteredFeeDuePaise - filteredFeePaidPaise))}</strong></span>
+                </div>
+              </div>
+            )}
 
             <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
               <table className="w-full text-left text-sm">
@@ -1072,14 +1570,14 @@ export default function InstituteAdminDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
-                  {invoices.length === 0 ? (
+                  {filteredInvoices.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="py-8 text-center text-slate-500 text-xs">
-                        No invoices generated yet. Click "Issue Fee Invoice" to create one.
+                        No fee invoices found matching your filter criteria.
                       </td>
                     </tr>
                   ) : (
-                    invoices.map(inv => {
+                    filteredInvoices.map(inv => {
                       const balancePaise = Number(inv.amount_due) - Number(inv.amount_paid);
                       const isPaid = inv.status === "paid";
                       return (
@@ -2020,6 +2518,113 @@ export default function InstituteAdminDashboard() {
                 </button>
                 <button type="submit" className="flex-1 py-2 bg-emerald-600 text-white rounded-xl text-xs font-semibold">
                   Confirm Payment
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Bulk Issue Invoices by Batch */}
+      {showBulkInvoiceModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="font-semibold text-sm text-white flex items-center gap-2">
+                  <FileSpreadsheet className="w-4 h-4 text-purple-400" />
+                  <span>Bulk Issue Invoices to Batch</span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Generates an individual fee invoice for every active student in the selected cohort
+                </p>
+              </div>
+              <button onClick={() => setShowBulkInvoiceModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateBulkInvoice} className="space-y-4">
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Target Academic Batch</label>
+                <select
+                  required
+                  value={bulkInvoice.batch_id}
+                  onChange={e => setBulkInvoice({ ...bulkInvoice, batch_id: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
+                >
+                  <option value="">Choose a batch...</option>
+                  {batches.filter(b => !b.deleted_at).map(b => (
+                    <option key={b.id} value={b.id}>
+                      {b.name} ({b.student_count || 0} enrolled)
+                    </option>
+                  ))}
+                </select>
+                {bulkInvoice.batch_id && (
+                  <div className="mt-1.5 text-[11px] text-purple-400 font-medium flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5" />
+                    <span>
+                      Will generate invoices for{" "}
+                      <strong>
+                        {students.filter(s => s.batch_id === bulkInvoice.batch_id && !s.deleted_at).length}
+                      </strong>{" "}
+                      students
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Fee Description / Title</label>
+                <input
+                  type="text"
+                  required
+                  value={bulkInvoice.title}
+                  onChange={e => setBulkInvoice({ ...bulkInvoice, title: e.target.value })}
+                  placeholder="e.g. October 2026 Tuition Fee"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Amount Due Per Student (₹)</label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    placeholder="2500"
+                    value={bulkInvoice.amount_due}
+                    onChange={e => setBulkInvoice({ ...bulkInvoice, amount_due: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Due Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={bulkInvoice.due_date}
+                    onChange={e => setBulkInvoice({ ...bulkInvoice, due_date: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkInvoiceModal(false)}
+                  className="flex-1 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingBulkInvoice}
+                  className="flex-1 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-purple-900/30"
+                >
+                  {creatingBulkInvoice ? "Generating..." : "Generate Batch Invoices"}
                 </button>
               </div>
             </form>

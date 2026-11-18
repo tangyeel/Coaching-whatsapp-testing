@@ -34,10 +34,10 @@ export async function POST(request) {
   if (auth.isTeacher) return Response.json({ error: "Only institute admins can create invoices" }, { status: 403 });
 
   const body = await request.json();
-  const { student_id, title, amount_due, due_date } = body;
+  const { student_id, bulk_batch_id, title, amount_due, due_date } = body;
 
-  if (!student_id || !title?.trim() || !amount_due || !due_date) {
-    return Response.json({ error: "Student, title, amount_due, and due_date are required" }, { status: 400 });
+  if (!title?.trim() || !amount_due || !due_date) {
+    return Response.json({ error: "Title, amount_due, and due_date are required" }, { status: 400 });
   }
 
   const amountInPaise = Math.round(Number(amount_due) * 100);
@@ -46,10 +46,63 @@ export async function POST(request) {
   }
 
   const admin = createAdminClient();
-
-  // Generate unique invoice number: INV-YYYY-XXXXX
   const prefix = auth.institute?.invoice_prefix || "INV";
   const year = new Date().getFullYear();
+
+  // --- BRANCH 1: BULK INVOICE FOR AN ENTIRE BATCH ---
+  if (bulk_batch_id) {
+    const { data: batchStudents, error: fetchErr } = await admin
+      .from("students")
+      .select("id, full_name, roll_no")
+      .eq("institute_id", auth.instituteId)
+      .eq("batch_id", bulk_batch_id)
+      .is("deleted_at", null);
+
+    if (fetchErr) return Response.json({ error: fetchErr.message }, { status: 500 });
+    if (!batchStudents || batchStudents.length === 0) {
+      return Response.json({ error: "No active students found in the selected batch" }, { status: 400 });
+    }
+
+    const rows = batchStudents.map((s, idx) => {
+      const randomSuffix = Math.floor(10000 + Math.random() * 89999);
+      const invoiceNo = `${prefix}-${year}-${randomSuffix}${idx}`;
+      return {
+        institute_id: auth.instituteId,
+        student_id: s.id,
+        invoice_no: invoiceNo,
+        title: title.trim(),
+        amount_due: amountInPaise,
+        amount_paid: 0,
+        due_date,
+        status: "unpaid",
+        created_by: auth.user.id,
+        fee_reminder_autopilot: Boolean(auth.institute?.fee_reminder_autopilot),
+      };
+    });
+
+    const { data: createdInvoices, error: insertErr } = await admin
+      .from("fee_invoices")
+      .insert(rows)
+      .select(`
+        *,
+        student:students(full_name, roll_no, guardian_name, guardian_phone, batches(name))
+      `);
+
+    if (insertErr) return Response.json({ error: insertErr.message }, { status: 500 });
+
+    return Response.json({
+      success: true,
+      bulk: true,
+      createdCount: createdInvoices.length,
+      data: createdInvoices,
+    });
+  }
+
+  // --- BRANCH 2: INDIVIDUAL STUDENT INVOICE ---
+  if (!student_id) {
+    return Response.json({ error: "Student ID or Batch ID is required" }, { status: 400 });
+  }
+
   const randomSuffix = Math.floor(10000 + Math.random() * 90000);
   const invoiceNo = `${prefix}-${year}-${randomSuffix}`;
 
@@ -66,6 +119,7 @@ export async function POST(request) {
         due_date,
         status: "unpaid",
         created_by: auth.user.id,
+        fee_reminder_autopilot: Boolean(auth.institute?.fee_reminder_autopilot),
       },
     ])
     .select(`

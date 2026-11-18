@@ -4,10 +4,12 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Navbar from "@/components/Navbar";
 import { formatDate } from "@/lib/utils";
+import { toast } from "@/components/Toast";
 import {
   ShieldCheck, Plus, School, Users, Layers, AlertCircle,
   CheckCircle2, XCircle, Search, KeyRound, ExternalLink, Activity,
-  Sliders, MessageSquare, TrendingUp, TrendingDown, Clock, X
+  Sliders, MessageSquare, TrendingUp, TrendingDown, Clock, X,
+  Copy, Check, AlertTriangle
 } from "lucide-react";
 
 export default function GlobalAdminDashboard() {
@@ -45,6 +47,11 @@ export default function GlobalAdminDashboard() {
     msg_limit_override: "",
   });
   const [savingQuota, setSavingQuota] = useState(false);
+
+  // Link copy feedback state & Suspend confirm modal
+  const [copiedId, setCopiedId] = useState(null);
+  const [suspendModalInst, setSuspendModalInst] = useState(null);
+  const [suspending, setSuspending] = useState(false);
 
   useEffect(() => {
     async function init() {
@@ -113,7 +120,7 @@ export default function GlobalAdminDashboard() {
           msg_limit_override: "",
         });
         fetchInstitutes();
-        alert(json.message);
+        toast.success(json.message || "Institute successfully onboarded!");
       } else {
         setOnboardError(json.error || "Onboarding failed");
       }
@@ -143,21 +150,19 @@ export default function GlobalAdminDashboard() {
       if (json.success) {
         setShowQuotaModal(false);
         fetchInstitutes();
+        toast.success("WhatsApp quota & plan updated successfully!");
       } else {
-        alert(json.error || "Failed to update quota");
+        toast.error(json.error || "Failed to update quota");
       }
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setSavingQuota(false);
     }
   }
 
-  async function toggleInstituteActive(institute) {
-    if (!confirm(`Are you sure you want to ${institute.is_active ? "suspend" : "reactivate"} ${institute.name}?`)) {
-      return;
-    }
-
+  async function executeToggleInstitute(institute) {
+    setSuspending(true);
     try {
       const res = await fetch("/api/admin/institutes", {
         method: "PATCH",
@@ -170,12 +175,32 @@ export default function GlobalAdminDashboard() {
 
       const json = await res.json();
       if (json.success) {
+        setSuspendModalInst(null);
         fetchInstitutes();
+        toast.success(`${institute.name} is now ${!institute.is_active ? "active" : "suspended"}`);
       } else {
-        alert(json.error);
+        toast.error(json.error || "Action failed");
       }
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
+    } finally {
+      setSuspending(false);
+    }
+  }
+
+  function handleCopyLoginLink(inst) {
+    const adminProfile = inst.profiles?.find(p => p.role === "institute_admin");
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const path = adminProfile?.password_changed === false ? "/setup-password" : "/login";
+    const fullUrl = `${origin}${path}`;
+    
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(fullUrl);
+      setCopiedId(inst.id);
+      toast.success(`Copied portal login URL (${path})`);
+      setTimeout(() => setCopiedId(null), 2500);
+    } else {
+      toast.info(`Login link: ${fullUrl}`);
     }
   }
 
@@ -315,7 +340,7 @@ export default function GlobalAdminDashboard() {
               <thead className="bg-slate-950/70 text-slate-400 text-[10px] uppercase font-semibold">
                 <tr>
                   <th className="py-3 px-4">Institute</th>
-                  <th className="py-3 px-4">Admin Email</th>
+                  <th className="py-3 px-4">Admin Email & Access</th>
                   <th className="py-3 px-4">Plan & Monthly Quota</th>
                   <th className="py-3 px-4">WhatsApp API</th>
                   <th className="py-3 px-4 text-center">Status</th>
@@ -346,15 +371,17 @@ export default function GlobalAdminDashboard() {
                       usagePct >= 75 ? "bg-amber-400" :
                       "bg-blue-500";
 
+                    const isCopied = copiedId === inst.id;
+
                     return (
                       <tr key={inst.id} className="hover:bg-slate-800/30">
                         <td className="py-3.5 px-4">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2.5">
                             {inst.logo_url ? (
-                              <img src={inst.logo_url} alt="" className="w-6 h-6 rounded object-contain bg-white/5" />
+                              <img src={inst.logo_url} alt="" className="w-7 h-7 rounded object-contain bg-white/5 p-0.5" />
                             ) : (
                               <div
-                                className="w-6 h-6 rounded flex items-center justify-center text-[11px] font-bold text-white"
+                                className="w-7 h-7 rounded flex items-center justify-center text-[11px] font-bold text-white shrink-0 shadow"
                                 style={{ backgroundColor: inst.banner_color || "#3b82f6" }}
                               >
                                 {inst.name?.[0]}
@@ -362,17 +389,40 @@ export default function GlobalAdminDashboard() {
                             )}
                             <div>
                               <div className="font-bold text-white text-sm">{inst.name}</div>
-                              <div className="text-[10px] text-slate-500 font-mono">
-                                {inst.slug} &bull; {batchCount}b / {studentCount}s
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="text-[10px] text-slate-500 font-mono">{inst.slug}</span>
+                                <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium">
+                                  {batchCount} b
+                                </span>
+                                <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 font-medium">
+                                  {studentCount} s
+                                </span>
                               </div>
                             </div>
                           </div>
                         </td>
 
                         <td className="py-3.5 px-4 text-xs font-mono text-slate-300">
-                          <div>{adminProfile?.email || "—"}</div>
-                          {adminProfile?.password_changed === false && (
-                            <span className="text-[10px] text-amber-400">⚠ Awaiting 1st login</span>
+                          <div className="flex items-center gap-2">
+                            <span>{adminProfile?.email || "—"}</span>
+                            <button
+                              onClick={() => handleCopyLoginLink(inst)}
+                              title="Copy Login Link to Clipboard"
+                              className="p-1 rounded text-slate-500 hover:text-white hover:bg-slate-800 transition-colors inline-flex items-center gap-1 font-sans text-[11px]"
+                            >
+                              {isCopied ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+                          {adminProfile?.password_changed === false ? (
+                            <span className="text-[10px] text-amber-400 block mt-0.5">⚠ Needs 1st login setup</span>
+                          ) : (
+                            <span className="text-[10px] text-slate-500 block mt-0.5 font-sans">
+                              Active since {formatDate(inst.created_at)}
+                            </span>
                           )}
                         </td>
 
@@ -437,7 +487,7 @@ export default function GlobalAdminDashboard() {
                           </button>
 
                           <button
-                            onClick={() => toggleInstituteActive(inst)}
+                            onClick={() => setSuspendModalInst(inst)}
                             className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors ${
                               inst.is_active
                                 ? "bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20"
@@ -715,6 +765,60 @@ export default function GlobalAdminDashboard() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL: CONFIRM SUSPEND / ACTIVATE INSTITUTE --- */}
+      {suspendModalInst && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center border ${
+              suspendModalInst.is_active
+                ? "bg-rose-500/10 border-rose-500/20 text-rose-400"
+                : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+            }`}>
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+
+            <div>
+              <h3 className="font-bold text-base text-white">
+                {suspendModalInst.is_active ? `Suspend "${suspendModalInst.name}"?` : `Reactivate "${suspendModalInst.name}"?`}
+              </h3>
+              <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                {suspendModalInst.is_active ? (
+                  <>
+                    Suspending this institute will immediately block staff and admin logins and pause scheduled automated dispatches. <strong className="text-slate-200">No student or fee data will be deleted.</strong> You can reactivate anytime.
+                  </>
+                ) : (
+                  <>
+                    Reactivating will restore full portal access for teachers and institute administrators, enabling live student management and WhatsApp dispatches.
+                  </>
+                )}
+              </p>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setSuspendModalInst(null)}
+                className="flex-1 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={suspending}
+                onClick={() => executeToggleInstitute(suspendModalInst)}
+                className={`flex-1 py-2 rounded-xl text-xs font-bold transition-colors text-white ${
+                  suspendModalInst.is_active
+                    ? "bg-rose-600 hover:bg-rose-500"
+                    : "bg-emerald-600 hover:bg-emerald-500"
+                }`}
+              >
+                {suspending ? "Updating..." : (suspendModalInst.is_active ? "Confirm Suspend" : "Confirm Reactivate")}
+              </button>
+            </div>
           </div>
         </div>
       )}

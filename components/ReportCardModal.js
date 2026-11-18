@@ -48,7 +48,7 @@ export default function ReportCardModal({ isOpen, onClose, student, institute, a
         </div>
 
         {/* Printable Card */}
-        <div className="p-8 bg-white text-slate-900 printable-card">
+        <div className="p-8 bg-white text-slate-900 printable-card printable-area">
           {/* Header */}
           <div
             className="flex justify-between items-start border-b-4 pb-5 mb-6"

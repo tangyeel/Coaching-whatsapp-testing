@@ -44,7 +44,7 @@ export default function InvoiceReceiptModal({ isOpen, onClose, data, institute, 
         </div>
 
         {/* Printable Document Body */}
-        <div className="p-8 bg-white text-slate-900 printable-card">
+        <div className="p-8 bg-white text-slate-900 printable-card printable-area">
           {/* Institute Header */}
           <div
             className="flex justify-between items-start border-b-2 pb-6 mb-6"

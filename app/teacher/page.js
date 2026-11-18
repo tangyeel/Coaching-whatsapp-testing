@@ -5,6 +5,7 @@ import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
 import Navbar from "@/components/Navbar";
 import ReportCardModal from "@/components/ReportCardModal";
+import { toast } from "@/components/Toast";
 import {
   Calendar, Check, X, Send, Award, FileText,
   Users, AlertCircle, Sparkles, CheckCircle2, Plus, UploadCloud,
@@ -226,7 +227,7 @@ export default function TeacherPortal() {
   async function handleSendAbsenceAlerts() {
     const absents = students.filter(s => attendance[s.id] === "absent");
     if (absents.length === 0) {
-      alert("No students marked absent.");
+      toast.info("No students marked absent.");
       return;
     }
 
@@ -256,12 +257,12 @@ export default function TeacherPortal() {
 
       const json = await res.json();
       if (json.success) {
-        alert(`Dispatched alerts: ${json.successCount} sent, ${json.failedCount} failed.`);
+        toast.success(`Dispatched absence alerts: ${json.successCount} sent, ${json.failedCount} failed.`);
       } else {
-        alert(`Failed to dispatch: ${json.error}`);
+        toast.error(`Failed to dispatch: ${json.error}`);
       }
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      toast.error(`Error: ${err.message}`);
     } finally {
       setSendingAlerts(false);
     }
@@ -280,7 +281,7 @@ export default function TeacherPortal() {
         const rawJson = XLSX.utils.sheet_to_json(sheet);
 
         if (rawJson.length === 0) {
-          alert("Excel file is empty");
+          toast.error("Excel file is empty");
           return;
         }
 
@@ -312,9 +313,9 @@ export default function TeacherPortal() {
         });
 
         setMarksState(newScores);
-        alert(`✔ Auto-filled scores for ${matchedCount} students from Excel`);
+        toast.success(`✔ Auto-filled scores for ${matchedCount} students from Excel`);
       } catch (err) {
-        alert("Failed to parse marks Excel: " + err.message);
+        toast.error("Failed to parse marks Excel: " + err.message);
       }
     };
     reader.readAsArrayBuffer(file);
@@ -369,11 +370,12 @@ export default function TeacherPortal() {
       if (json.success) {
         setShowNewAssessment(false);
         fetchAssessments(selectedBatchId);
+        toast.success("Assessment created successfully!");
       } else {
-        alert(json.error);
+        toast.error(json.error || "Failed to create assessment");
       }
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   }
 
@@ -397,11 +399,14 @@ export default function TeacherPortal() {
       const json = await res.json();
       if (json.success) {
         setMarksMessage("✔ Marks saved successfully");
+        toast.success("Marks saved successfully!");
       } else {
         setMarksMessage(`✘ ${json.error}`);
+        toast.error(`Failed to save marks: ${json.error}`);
       }
     } catch (err) {
       setMarksMessage(`✘ Error: ${err.message}`);
+      toast.error(`Error: ${err.message}`);
     } finally {
       setSavingMarks(false);
     }
@@ -413,7 +418,7 @@ export default function TeacherPortal() {
 
     const scoredStudents = students.filter(s => marksState[s.id] !== undefined && marksState[s.id] !== "");
     if (scoredStudents.length === 0) {
-      alert("No marks entered to dispatch.");
+      toast.info("No marks entered to dispatch.");
       return;
     }
 
@@ -444,12 +449,12 @@ export default function TeacherPortal() {
 
       const json = await res.json();
       if (json.success) {
-        alert(`Dispatched marks: ${json.successCount} sent, ${json.failedCount} failed.`);
+        toast.success(`Dispatched marks: ${json.successCount} sent, ${json.failedCount} failed.`);
       } else {
-        alert(`Failed: ${json.error}`);
+        toast.error(`Failed: ${json.error}`);
       }
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      toast.error(`Error: ${err.message}`);
     } finally {
       setSendingMarks(false);
     }
