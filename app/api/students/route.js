@@ -1,6 +1,7 @@
 import { getAuthContext } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { normalizePhone } from "@/lib/utils";
+import { logAudit } from "@/lib/audit";
 
 export async function GET(request) {
   const auth = await getAuthContext(request);
@@ -80,6 +81,18 @@ export async function POST(request) {
       .single();
 
     if (error) return Response.json({ error: error.message }, { status: 500 });
+    
+    await logAudit({
+      institute_id: auth.instituteId,
+      actor_id: auth.user.id,
+      actor_email: auth.user.email,
+      action: "student.created",
+      entity_type: "student",
+      entity_id: data.id,
+      entity_name: data.full_name,
+      metadata: { roll_no: data.roll_no, batch_id: data.batch_id },
+    });
+
     return Response.json({ success: true, data });
   }
 
@@ -111,6 +124,18 @@ export async function POST(request) {
       .select();
 
     if (error) return Response.json({ error: error.message }, { status: 500 });
+    
+    await logAudit({
+      institute_id: auth.instituteId,
+      actor_id: auth.user.id,
+      actor_email: auth.user.email,
+      action: "student.created",
+      entity_type: "student",
+      entity_id: data.id,
+      entity_name: data.full_name,
+      metadata: { roll_no: data.roll_no, batch_id: data.batch_id },
+    });
+
     return Response.json({ success: true, data });
   }
 
@@ -147,6 +172,18 @@ export async function PATCH(request) {
     .single();
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
+
+  await logAudit({
+    institute_id: auth.instituteId,
+    actor_id: auth.user.id,
+    actor_email: auth.user.email,
+    action: restore ? "student.restored" : "student.updated",
+    entity_type: "student",
+    entity_id: data.id,
+    entity_name: data.full_name,
+    metadata: updates,
+  });
+
   return Response.json({ success: true, data });
 }
 
@@ -177,6 +214,18 @@ export async function DELETE(request) {
     .single();
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
+
+  await logAudit({
+    institute_id: auth.instituteId,
+    actor_id: auth.user.id,
+    actor_email: auth.user.email,
+    action: "student.archived",
+    entity_type: "student",
+    entity_id: data.id,
+    entity_name: data.full_name,
+    metadata: { reason: "admin soft-delete" },
+  });
+
   return Response.json({
     success: true,
     data,

@@ -7,6 +7,8 @@ import InvoiceReceiptModal from "@/components/InvoiceReceiptModal";
 import TransferStudentModal from "@/components/TransferStudentModal";
 import ExcelStudentImportModal from "@/components/ExcelStudentImportModal";
 import StudentProfileModal from "@/components/StudentProfileModal";
+import BroadcastModal from "@/components/BroadcastModal";
+import AttendanceAnalyticsView from "@/components/charts/AttendanceAnalyticsView";
 import OnboardingChecklist from "@/components/OnboardingChecklist";
 import { toast } from "@/components/Toast";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -18,7 +20,7 @@ import {
   Archive, RotateCcw, AlertTriangle, KeyRound, Sparkles, Sliders,
   Palette, Image as ImageIcon, ExternalLink, Lock, ArrowUpDown,
   ArrowUp, ArrowDown, ChevronLeft, ChevronRight, FileSpreadsheet,
-  Check, Filter, Calendar, RefreshCw
+  Check, Filter, Calendar, RefreshCw, Download, TrendingUp
 } from "lucide-react";
 
 export default function InstituteAdminDashboard() {
@@ -125,6 +127,9 @@ export default function InstituteAdminDashboard() {
     reference_no: "",
     notes: "",
   });
+
+  // Broadcast Announcement State
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
 
   // Settings State: Basic Info
   const [settingsForm, setSettingsForm] = useState({
@@ -804,6 +809,7 @@ export default function InstituteAdminDashboard() {
             { id: "students", label: "Students", icon: Users },
             { id: "teachers", label: "Staff & Teachers", icon: UserCheck },
             { id: "fees", label: "Fees & Invoices", icon: Receipt },
+            { id: "analytics", label: "Attendance Trends", icon: TrendingUp },
             { id: "messages", label: "WhatsApp Outbox", icon: MessageSquare },
             { id: "settings", label: "Institute Settings", icon: Settings },
           ].map(tab => {
@@ -1509,7 +1515,25 @@ export default function InstituteAdminDashboard() {
                 <h2 className="text-lg font-bold text-white">Fee Invoices & Payments</h2>
                 <p className="text-xs text-slate-400 mt-0.5">Issue tuition invoices, collect payments, and print branded receipts</p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <a
+                  href={`/api/fees/export?format=csv${feeFilterBatchId ? `&batch_id=${feeFilterBatchId}` : ""}`}
+                  download
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-semibold rounded-xl border border-slate-800 transition-colors shadow-sm"
+                  title="Export Unpaid Defaulters as CSV"
+                >
+                  <Download className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Export CSV</span>
+                </a>
+                <a
+                  href={`/api/fees/export?format=xlsx${feeFilterBatchId ? `&batch_id=${feeFilterBatchId}` : ""}`}
+                  download
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-semibold rounded-xl border border-slate-800 transition-colors shadow-sm"
+                  title="Export Unpaid Defaulters as Excel Spreadsheet"
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Export Excel</span>
+                </a>
                 <button
                   onClick={() => setShowBulkInvoiceModal(true)}
                   className="flex items-center gap-1.5 px-3.5 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold rounded-xl transition-all shadow-md shadow-purple-900/20"
@@ -1680,6 +1704,13 @@ export default function InstituteAdminDashboard() {
         )}
 
         {/* ============================================================ */}
+        {/* TAB: ATTENDANCE TRENDS & RETENTION INTELLIGENCE              */}
+        {/* ============================================================ */}
+        {activeTab === "analytics" && (
+          <AttendanceAnalyticsView batches={batches.filter(b => !b.deleted_at)} />
+        )}
+
+        {/* ============================================================ */}
         {/* TAB 6: WHATSAPP DISPATCH OUTBOX & USAGE METER                */}
         {/* ============================================================ */}
         {activeTab === "messages" && (
@@ -1747,9 +1778,18 @@ export default function InstituteAdminDashboard() {
             </div>
 
             {/* Outbox Table */}
-            <div>
-              <h2 className="text-lg font-bold text-white">Message Outbox History</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Auditable dispatch log of marks updates, absence notifications, and fee reminders</p>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h2 className="text-lg font-bold text-white">Message Outbox History</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Auditable dispatch log of marks updates, absence notifications, and fee reminders</p>
+              </div>
+              <button
+                onClick={() => setShowBroadcastModal(true)}
+                className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl transition-all shadow-md shadow-blue-900/20"
+              >
+                <Send className="w-4 h-4" />
+                <span>New Announcement Broadcast</span>
+              </button>
             </div>
 
             <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
@@ -2763,6 +2803,25 @@ export default function InstituteAdminDashboard() {
         isOpen={profileModalOpen}
         onClose={() => setProfileModalOpen(false)}
         student={selectedStudentForProfile}
+      />
+
+      {/* WhatsApp Announcement Broadcast Modal */}
+      <BroadcastModal
+        isOpen={showBroadcastModal}
+        onClose={() => setShowBroadcastModal(false)}
+        batches={batches.filter(b => !b.deleted_at)}
+        students={students}
+        quotaRemaining={effectiveLimit > 0 ? Math.max(0, effectiveLimit - messagesUsedThisMonth) : null}
+        onBroadcastSent={() => {
+          fetchMessageJobs();
+          // Update local usage counter
+          if (institute) {
+            setInstitute({
+              ...institute,
+              messages_sent_this_month: (institute.messages_sent_this_month || 0) + 1,
+            });
+          }
+        }}
       />
     </div>
   );

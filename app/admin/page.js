@@ -5,11 +5,12 @@ import { createClient } from "@/lib/supabase/client";
 import Navbar from "@/components/Navbar";
 import { formatDate } from "@/lib/utils";
 import { toast } from "@/components/Toast";
+import { PLANS } from "@/lib/plans";
 import {
   ShieldCheck, Plus, School, Users, Layers, AlertCircle,
   CheckCircle2, XCircle, Search, KeyRound, ExternalLink, Activity,
   Sliders, MessageSquare, TrendingUp, TrendingDown, Clock, X,
-  Copy, Check, AlertTriangle
+  Copy, Check, AlertTriangle, IndianRupee
 } from "lucide-react";
 
 export default function GlobalAdminDashboard() {
@@ -222,6 +223,13 @@ export default function GlobalAdminDashboard() {
     msgGrowth = Math.round(((messagesThisMonth - messagesPrevMonth) / messagesPrevMonth) * 100);
   }
 
+  const totalMRR = institutes
+    .filter(i => i.is_active)
+    .reduce((acc, i) => {
+      const tier = i.plan_tier || "starter";
+      return acc + (PLANS[tier]?.price_inr || 0);
+    }, 0);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
@@ -257,7 +265,20 @@ export default function GlobalAdminDashboard() {
         </div>
 
         {/* Overview Stats (Platform Health Panel) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="p-5 bg-slate-900 border border-slate-800 rounded-2xl relative overflow-hidden">
+            <div className="flex items-center justify-between text-slate-400 mb-2">
+              <span className="text-xs uppercase tracking-wider font-semibold">Active MRR</span>
+              <IndianRupee className="w-4 h-4 text-emerald-400" />
+            </div>
+            <div className="text-3xl font-black text-emerald-400 font-mono">
+              ₹{totalMRR.toLocaleString("en-IN")}
+            </div>
+            <div className="text-xs text-slate-400 mt-1">
+              Monthly SaaS run-rate
+            </div>
+          </div>
+
           <div className="p-5 bg-slate-900 border border-slate-800 rounded-2xl">
             <div className="flex items-center justify-between text-slate-400 mb-2">
               <span className="text-xs uppercase tracking-wider font-semibold">Total Institutes</span>

@@ -1,5 +1,6 @@
 import { getAuthContext } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { logAudit } from "@/lib/audit";
 
 export async function GET(request) {
   const auth = await getAuthContext(request);
@@ -90,6 +91,17 @@ export async function POST(request) {
 
     if (insertErr) return Response.json({ error: insertErr.message }, { status: 500 });
 
+    await logAudit({
+      institute_id: auth.instituteId,
+      actor_id: auth.user.id,
+      actor_email: auth.user.email,
+      action: "invoice.bulk_created",
+      entity_type: "batch",
+      entity_id: bulk_batch_id,
+      entity_name: title,
+      metadata: { count: createdInvoices.length, amountInPaise },
+    });
+
     return Response.json({
       success: true,
       bulk: true,
@@ -129,5 +141,17 @@ export async function POST(request) {
     .single();
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
+
+  await logAudit({
+    institute_id: auth.instituteId,
+    actor_id: auth.user.id,
+    actor_email: auth.user.email,
+    action: "invoice.created",
+    entity_type: "invoice",
+    entity_id: data.id,
+    entity_name: data.invoice_no,
+    metadata: { student_id, amountInPaise, title },
+  });
+
   return Response.json({ success: true, data });
 }
