@@ -18,7 +18,7 @@ import {
   Archive, RotateCcw, AlertTriangle, KeyRound, Sparkles, Sliders,
   Palette, Image as ImageIcon, ExternalLink, Lock, ArrowUpDown,
   ArrowUp, ArrowDown, ChevronLeft, ChevronRight, FileSpreadsheet,
-  Check, Filter, Calendar
+  Check, Filter, Calendar, RefreshCw
 } from "lucide-react";
 
 export default function InstituteAdminDashboard() {
@@ -151,6 +151,11 @@ export default function InstituteAdminDashboard() {
   const [testPhone, setTestPhone] = useState("");
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState(null);
+
+  // Settings State: WhatsApp Message Templates Status
+  const [waTemplates, setWaTemplates] = useState([]);
+  const [loadingWaTemplates, setLoadingWaTemplates] = useState(false);
+  const [waTemplatesFetched, setWaTemplatesFetched] = useState(false);
 
   useEffect(() => {
     async function init() {
@@ -647,6 +652,25 @@ export default function InstituteAdminDashboard() {
       setTestResult({ success: false, error: err.message });
     } finally {
       setTestingConnection(false);
+    }
+  }
+
+  async function fetchWaTemplates() {
+    setLoadingWaTemplates(true);
+    try {
+      const res = await fetch("/api/whatsapp/templates");
+      const json = await res.json();
+      if (json.success && json.templates) {
+        setWaTemplates(json.templates);
+      } else if (json.error) {
+        toast.error(json.error);
+      }
+      setWaTemplatesFetched(true);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to fetch WhatsApp templates");
+    } finally {
+      setLoadingWaTemplates(false);
     }
   }
 
@@ -2056,6 +2080,76 @@ export default function InstituteAdminDashboard() {
                       </div>
                     )}
                   </div>
+                </div>
+
+                {/* Card 5: WhatsApp Template Approval Monitor */}
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                      <MessageSquare className="w-4 h-4 text-blue-400" />
+                      <span>WhatsApp Template Approvals</span>
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={fetchWaTemplates}
+                      disabled={loadingWaTemplates}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${loadingWaTemplates ? "animate-spin text-blue-400" : ""}`} />
+                      <span>{loadingWaTemplates ? "Checking..." : "Refresh"}</span>
+                    </button>
+                  </div>
+
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Meta requires utility message templates to be reviewed and approved before they can be dispatched to parent handsets.
+                  </p>
+
+                  {!waTemplatesFetched && (
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        onClick={fetchWaTemplates}
+                        disabled={loadingWaTemplates}
+                        className="w-full py-2 bg-slate-800/80 hover:bg-slate-800 text-xs text-slate-300 font-medium rounded-xl border border-slate-700/60 transition-colors"
+                      >
+                        {loadingWaTemplates ? "Connecting to Meta Graph API..." : "Check Registered Template Status"}
+                      </button>
+                    </div>
+                  )}
+
+                  {waTemplatesFetched && (
+                    <div className="border-t border-slate-800 pt-3 space-y-2">
+                      {waTemplates.length === 0 ? (
+                        <div className="p-3 bg-slate-950/60 rounded-xl text-xs text-slate-400 border border-slate-800/80 text-center">
+                          No registered templates found. Ensure your WABA ID and System User Token have been provisioned by Platform Admin.
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-slate-800/60 max-h-56 overflow-y-auto">
+                          {waTemplates.map((tmpl, idx) => {
+                            const isApproved = tmpl.status === "APPROVED";
+                            const isPending = tmpl.status === "PENDING";
+                            return (
+                              <div key={idx} className="py-2 flex items-center justify-between text-xs">
+                                <div>
+                                  <div className="font-mono text-slate-200 font-semibold">{tmpl.name}</div>
+                                  <div className="text-[10px] text-slate-500 uppercase">{tmpl.category || "UTILITY"} • {tmpl.language || "en"}</div>
+                                </div>
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                                  isApproved
+                                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                                    : isPending
+                                    ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                                    : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                                }`}>
+                                  {tmpl.status}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
