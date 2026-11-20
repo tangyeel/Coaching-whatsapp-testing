@@ -8,6 +8,8 @@ import TransferStudentModal from "@/components/TransferStudentModal";
 import ExcelStudentImportModal from "@/components/ExcelStudentImportModal";
 import StudentProfileModal from "@/components/StudentProfileModal";
 import BroadcastModal from "@/components/BroadcastModal";
+import TemplateEditorModal from "@/components/TemplateEditorModal";
+import PlanUpgradeModal from "@/components/PlanUpgradeModal";
 import AttendanceAnalyticsView from "@/components/charts/AttendanceAnalyticsView";
 import OnboardingChecklist from "@/components/OnboardingChecklist";
 import { toast } from "@/components/Toast";
@@ -130,6 +132,12 @@ export default function InstituteAdminDashboard() {
 
   // Broadcast Announcement State
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
+
+  // Custom Message Template State
+  const [showTemplateEditorModal, setShowTemplateEditorModal] = useState(false);
+
+  // Plan Upgrade State
+  const [showPlanUpgradeModal, setShowPlanUpgradeModal] = useState(false);
 
   // Settings State: Basic Info
   const [settingsForm, setSettingsForm] = useState({
@@ -1741,13 +1749,14 @@ export default function InstituteAdminDashboard() {
                     </div>
                   </div>
 
-                  <a
-                    href={`mailto:${supportEmail}?subject=WhatsApp Quota Upgrade Request - ${institute?.name}`}
-                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl border border-slate-700 transition-colors inline-flex items-center gap-1.5"
+                  <button
+                    type="button"
+                    onClick={() => setShowPlanUpgradeModal(true)}
+                    className="px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-semibold rounded-xl shadow-md shadow-blue-900/30 transition-all inline-flex items-center gap-1.5"
                   >
-                    <span>Upgrade</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
+                    <Sparkles className="w-3 h-3 text-amber-300" />
+                    <span>Upgrade Plan</span>
+                  </button>
                 </div>
               </div>
 
@@ -2069,6 +2078,15 @@ export default function InstituteAdminDashboard() {
                   <p className="text-xs text-slate-400 leading-relaxed">
                     Meta Cloud API tokens, phone registration, and webhook tunnels are professionally configured and managed by your platform provider.
                   </p>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowTemplateEditorModal(true)}
+                    className="w-full py-2 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 text-xs font-semibold rounded-xl border border-blue-500/20 flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <Sliders className="w-3.5 h-3.5" />
+                    <span>Customize Message Phrasing & Dynamic Tags</span>
+                  </button>
 
                   <div className="border-t border-slate-800 pt-4 space-y-3">
                     <div className="flex items-center justify-between">
@@ -2820,6 +2838,24 @@ export default function InstituteAdminDashboard() {
               ...institute,
               messages_sent_this_month: (institute.messages_sent_this_month || 0) + 1,
             });
+          }
+        }}
+      />
+
+      {/* Custom Message Template Phrasing Editor */}
+      <TemplateEditorModal
+        isOpen={showTemplateEditorModal}
+        onClose={() => setShowTemplateEditorModal(false)}
+      />
+
+      {/* Plan Upgrade & Quota Expansion Modal */}
+      <PlanUpgradeModal
+        isOpen={showPlanUpgradeModal}
+        onClose={() => setShowPlanUpgradeModal(false)}
+        currentTier={institute?.plan_tier || "starter"}
+        onUpgradeSuccess={(updatedInst) => {
+          if (updatedInst) {
+            setInstitute(updatedInst);
           }
         }}
       />
